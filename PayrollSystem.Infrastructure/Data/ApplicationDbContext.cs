@@ -1,14 +1,15 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
-using PayrollSystem.Core.Entities.System;
-using PayrollSystem.Core.Entities.Employers;
-using PayrollSystem.Core.Entities.Employees;
-using PayrollSystem.Core.Entities.Payroll;
-using PayrollSystem.Core.Entities.Benefits;
-using PayrollSystem.Core.Entities.Leaves;
-using PayrollSystem.Core.Entities.TimeTracking;
+using PayrollSystem.Core.Entities;
 using PayrollSystem.Core.Entities.Audit;
 using PayrollSystem.Core.Entities.Base;
+using PayrollSystem.Core.Entities.Benefits;
+using PayrollSystem.Core.Entities.Employees;
+using PayrollSystem.Core.Entities.Employers;
+using PayrollSystem.Core.Entities.Leaves;
+using PayrollSystem.Core.Entities.Payroll;
+using PayrollSystem.Core.Entities.System;
+using PayrollSystem.Core.Entities.TimeTracking;
 using PayrollSystem.Core.Interfaces;
 using System.Linq.Expressions;
 
@@ -33,6 +34,8 @@ public class ApplicationDbContext : IdentityDbContext<User>
     public DbSet<SystemSettings> SystemSettings { get; set; }
     public DbSet<Employer> Employers { get; set; }
     public DbSet<EmployerUser> EmployerUsers { get; set; }
+    public DbSet<ApplicationUser> ApplicationUsers { get; set; }
+    public DbSet<UserEmployer> UserEmployers { get; set; }
 
     // Tenant-Specific Tables
     public DbSet<EmployerSettings> EmployerSettings { get; set; }
@@ -71,6 +74,12 @@ public class ApplicationDbContext : IdentityDbContext<User>
         {
             entity.ToTable("Users");
         });
+
+        modelBuilder.Entity<ApplicationUser>()
+            .HasOne(u => u.PrimaryEmployer)
+            .WithMany()
+            .HasForeignKey(u => u.PrimaryEmployerId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 
     private void ApplyTenantQueryFilters(ModelBuilder modelBuilder)

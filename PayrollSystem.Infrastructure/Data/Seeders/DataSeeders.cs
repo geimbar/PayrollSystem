@@ -1,74 +1,31 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using PayrollSystem.Core.Entities.System;
-using PayrollSystem.Core.Entities.Employers;
+using PayrollSystem.Core.Entities;
 using PayrollSystem.Core.Entities.Employees;
-using PayrollSystem.Core.Entities.Payroll;
-using PayrollSystem.Core.Entities.Leaves;
+using PayrollSystem.Core.Entities.Employers;
+using PayrollSystem.Infrastructure.Data;
 
-namespace PayrollSystem.Infrastructure.Data.Seeders;
+namespace PayrollSystem.Infrastructure.Data.Seeder;
 
-public static class DataSeeder
+public class DataSeeder
 {
-    public static async Task SeedAsync(
-        ApplicationDbContext context,
-        UserManager<User> userManager,
-        RoleManager<IdentityRole> roleManager)
+    private readonly ApplicationDbContext _context;
+
+    public DataSeeder(ApplicationDbContext context)
     {
-        await context.Database.MigrateAsync();
-
-        await SeedRolesAsync(roleManager);
-        await SeedSystemAdminAsync(userManager);
-        await SeedDemoEmployerAsync(context, userManager);
-        await SeedSystemSettingsAsync(context);
-
-        await context.SaveChangesAsync();
+        _context = context;
     }
 
-    private static async Task SeedRolesAsync(RoleManager<IdentityRole> roleManager)
+    public async Task SeedAsync()
     {
-        var roles = new[] { "SystemAdmin", "Admin", "HR", "Manager", "Employee" };
-
-        foreach (var roleName in roles)
+        // Check if data already exists
+        if (await _context.Employers.AnyAsync())
         {
-            if (!await roleManager.RoleExistsAsync(roleName))
-            {
-                await roleManager.CreateAsync(new IdentityRole(roleName));
-            }
-        }
-    }
-
-    private static async Task SeedSystemAdminAsync(UserManager<User> userManager)
-    {
-        var adminEmail = "admin@payrollsystem.com";
-        
-        if (await userManager.FindByEmailAsync(adminEmail) == null)
-        {
-            var adminUser = new User
-            {
-                UserName = adminEmail,
-                Email = adminEmail,
-                EmailConfirmed = true,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            var result = await userManager.CreateAsync(adminUser, "Admin@123!");
-            
-            if (result.Succeeded)
-            {
-                await userManager.AddToRoleAsync(adminUser, "SystemAdmin");
-            }
-        }
-    }
-
-    private static async Task SeedDemoEmployerAsync(
-        ApplicationDbContext context,
-        UserManager<User> userManager)
-    {
-        if (await context.Employers.AnyAsync(e => e.CompanyName == "Demo Company Inc."))
-        {
+            Console.WriteLine("Database already seeded. Skipping...");
             return;
         }
+
+        Console.WriteLine("Seeding database...");
 
         // Create Demo Employer
         var demoEmployer = new Employer
@@ -80,71 +37,13 @@ public static class DataSeeder
             State = "NY",
             ZipCode = "10001",
             Country = "USA",
-            Phone = "+1 (555) 123-4567",
-            Email = "info@democompany.com",
-            Website = "https://democompany.com",
-            SubscriptionPlan = "Premium",
-            SubscriptionStatus = "Active",
-            SubscriptionStartDate = DateTime.UtcNow,
+            Phone = "(555) 123-4567",
+            Email = "contact@democompany.com",
             IsActive = true,
-            CreatedAt = DateTime.UtcNow,
-            CreatedBy = "system"
+            CreatedAt = DateTime.UtcNow
         };
-
-        context.Employers.Add(demoEmployer);
-        await context.SaveChangesAsync();
-
-        // Create Demo Company Admin User
-        var companyAdminEmail = "admin@democompany.com";
-        var companyAdminUser = await userManager.FindByEmailAsync(companyAdminEmail);
-        
-        if (companyAdminUser == null)
-        {
-            companyAdminUser = new User
-            {
-                UserName = companyAdminEmail,
-                Email = companyAdminEmail,
-                EmailConfirmed = true,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            await userManager.CreateAsync(companyAdminUser, "DemoAdmin@123!");
-            await userManager.AddToRoleAsync(companyAdminUser, "Admin");
-        }
-
-        // Link Admin User to Employer
-        var employerUser = new EmployerUser
-        {
-            UserId = companyAdminUser.Id,
-            EmployerId = demoEmployer.Id,
-            Role = "Admin",
-            IsActive = true,
-            CreatedAt = DateTime.UtcNow,
-            CreatedBy = "system"
-        };
-
-        context.EmployerUsers.Add(employerUser);
-
-        // Create Employer Settings
-        var settings = new EmployerSettings
-        {
-            EmployerId = demoEmployer.Id,
-            DefaultPayPeriodType = "BiWeekly",
-            PayrollStartDay = "Monday",
-            DefaultCurrency = "USD",
-            TimeZone = "America/New_York",
-            DateFormat = "MM/dd/yyyy",
-            TimeFormat = "hh:mm tt",
-            FiscalYearStartMonth = 1,
-            AllowOvertime = true,
-            OvertimeMultiplier = 1.5m,
-            EnableTimesheets = true,
-            RequireTimeApproval = true,
-            CreatedAt = DateTime.UtcNow,
-            CreatedBy = "system"
-        };
-
-        context.EmployerSettings.Add(settings);
+        _context.Employers.Add(demoEmployer);
+        await _context.SaveChangesAsync();
 
         // Create Departments
         var departments = new[]
@@ -153,33 +52,26 @@ public static class DataSeeder
             {
                 EmployerId = demoEmployer.Id,
                 Name = "Engineering",
-                Description = "Software development and IT",
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow,
-                CreatedBy = "system"
+                Description = "Software development team",
+                CreatedAt = DateTime.UtcNow
             },
             new Department
             {
                 EmployerId = demoEmployer.Id,
-                Name = "Human Resources",
-                Description = "HR and employee relations",
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow,
-                CreatedBy = "system"
+                Name = "HR",
+                Description = "Human Resources",
+                CreatedAt = DateTime.UtcNow
             },
             new Department
             {
                 EmployerId = demoEmployer.Id,
                 Name = "Finance",
-                Description = "Accounting and financial operations",
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow,
-                CreatedBy = "system"
+                Description = "Finance and Accounting",
+                CreatedAt = DateTime.UtcNow
             }
         };
-
-        context.Departments.AddRange(departments);
-        await context.SaveChangesAsync();
+        _context.Departments.AddRange(departments);
+        await _context.SaveChangesAsync();
 
         // Create Sample Employees
         var employees = new[]
@@ -187,138 +79,196 @@ public static class DataSeeder
             new Employee
             {
                 EmployerId = demoEmployer.Id,
-                EmployeeNumber = "EMP001",
-                FirstName = "John",
-                LastName = "Smith",
-                Email = "john.smith@democompany.com",
-                Phone = "+1 (555) 111-1111",
                 DepartmentId = departments[0].Id,
-                JobTitle = "Senior Software Engineer",
-                EmploymentType = "FullTime",
+                FirstName = "John",
+                LastName = "Doe",
+                Email = "john.doe@democompany.com",
+                Phone = "(555) 111-2222",
+                DateOfBirth = new DateTime(1985, 5, 15),
+                HireDate = new DateTime(2020, 1, 15),
                 EmploymentStatus = "Active",
-                HireDate = DateTime.UtcNow.AddYears(-2),
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow,
-                CreatedBy = "system"
+                JobTitle = "Senior Software Engineer",
+                Address = "456 Tech Ave",
+                City = "New York",
+                State = "NY",
+                ZipCode = "10002",
+                Country = "USA",
+                CreatedAt = DateTime.UtcNow
             },
             new Employee
             {
                 EmployerId = demoEmployer.Id,
-                EmployeeNumber = "EMP002",
-                FirstName = "Sarah",
-                LastName = "Johnson",
-                Email = "sarah.johnson@democompany.com",
-                Phone = "+1 (555) 222-2222",
                 DepartmentId = departments[1].Id,
-                JobTitle = "HR Manager",
-                EmploymentType = "FullTime",
+                FirstName = "Jane",
+                LastName = "Smith",
+                Email = "jane.smith@democompany.com",
+                Phone = "(555) 333-4444",
+                DateOfBirth = new DateTime(1990, 8, 22),
+                HireDate = new DateTime(2021, 3, 1),
                 EmploymentStatus = "Active",
-                HireDate = DateTime.UtcNow.AddYears(-3),
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow,
-                CreatedBy = "system"
+                JobTitle = "HR Manager",
+                Address = "789 Office Blvd",
+                City = "New York",
+                State = "NY",
+                ZipCode = "10003",
+                Country = "USA",
+                CreatedAt = DateTime.UtcNow
             }
         };
+        _context.Employees.AddRange(employees);
+        await _context.SaveChangesAsync();
 
-        context.Employees.AddRange(employees);
-        await context.SaveChangesAsync();
-
-        // Create Employee Compensations
-        var compensations = new[]
-        {
-            new EmployeeCompensation
-            {
-                EmployerId = demoEmployer.Id,
-                EmployeeId = employees[0].Id,
-                CompensationType = "Salary",
-                Amount = 95000m,
-                Currency = "USD",
-                PayFrequency = "BiWeekly",
-                EffectiveDate = employees[0].HireDate,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow,
-                CreatedBy = "system"
-            },
-            new EmployeeCompensation
-            {
-                EmployerId = demoEmployer.Id,
-                EmployeeId = employees[1].Id,
-                CompensationType = "Salary",
-                Amount = 75000m,
-                Currency = "USD",
-                PayFrequency = "BiWeekly",
-                EffectiveDate = employees[1].HireDate,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow,
-                CreatedBy = "system"
-            }
-        };
-
-        context.EmployeeCompensations.AddRange(compensations);
-
-        // Create Deduction Types
-        var deductionTypes = new[]
-        {
-            new DeductionType
-            {
-                EmployerId = demoEmployer.Id,
-                Name = "Health Insurance",
-                Description = "Employee health insurance premium",
-                DeductionCategory = "PreTax",
-                IsPercentage = false,
-                DefaultAmount = 150m,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow,
-                CreatedBy = "system"
-            }
-        };
-
-        context.DeductionTypes.AddRange(deductionTypes);
-
-        // Create Leave Types
-        var leaveTypes = new[]
-        {
-            new LeaveType
-            {
-                EmployerId = demoEmployer.Id,
-                Name = "Vacation",
-                Description = "Paid vacation time",
-                IsPaid = true,
-                DefaultDaysPerYear = 15,
-                AccrualRate = 1.25m,
-                MaxCarryOver = 40,
-                RequiresApproval = true,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow,
-                CreatedBy = "system"
-            }
-        };
-
-        context.LeaveTypes.AddRange(leaveTypes);
-
-        await context.SaveChangesAsync();
+        Console.WriteLine("Database seeded successfully!");
+        Console.WriteLine($"Created employer: {demoEmployer.CompanyName}");
+        Console.WriteLine($"Created {departments.Length} departments");
+        Console.WriteLine($"Created {employees.Length} employees");
     }
 
-    private static async Task SeedSystemSettingsAsync(ApplicationDbContext context)
+    /// <summary>
+    /// Seeds a demo user for testing authentication
+    /// Call this AFTER SeedAsync() to ensure employer exists
+    /// </summary>
+    public async Task SeedDemoUserAsync(UserManager<ApplicationUser> userManager)
     {
-        if (await context.SystemSettings.AnyAsync())
+        // Check if demo user exists
+        var demoUser = await userManager.FindByEmailAsync("admin@democompany.com");
+
+        if (demoUser != null)
         {
+            Console.WriteLine("Demo user already exists. Skipping user creation...");
             return;
         }
 
-        var settings = new[]
+        Console.WriteLine("Creating demo user...");
+
+        // Get the demo employer
+        var demoEmployer = await _context.Employers
+            .FirstOrDefaultAsync(e => e.CompanyName == "Demo Company Inc.");
+
+        if (demoEmployer == null)
         {
-            new SystemSettings
-            {
-                SettingKey = "MaintenanceMode",
-                SettingValue = "false",
-                Description = "Enable/disable system maintenance mode",
-                CreatedAt = DateTime.UtcNow,
-                CreatedBy = "system"
-            }
+            Console.WriteLine("ERROR: Demo employer not found. Run SeedAsync() first.");
+            throw new Exception("Demo employer not found. Run initial seed first.");
+        }
+
+        // Create demo admin user
+        demoUser = new ApplicationUser
+        {
+            UserName = "admin@democompany.com",
+            Email = "admin@democompany.com",
+            EmailConfirmed = true,
+            FullName = "System Administrator",
+            PrimaryEmployerId = demoEmployer.Id,
+            IsSystemAdmin = true,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
         };
 
-        context.SystemSettings.AddRange(settings);
-        await context.SaveChangesAsync();
+        var result = await userManager.CreateAsync(demoUser, "Admin123!");
+
+        if (result.Succeeded)
+        {
+            // Add user-employer relationship
+            _context.UserEmployers.Add(new UserEmployer
+            {
+                UserId = demoUser.Id,
+                EmployerId = demoEmployer.Id,
+                Role = "Admin",
+                GrantedAt = DateTime.UtcNow
+            });
+
+            await _context.SaveChangesAsync();
+
+            Console.WriteLine("Demo user created successfully!");
+            Console.WriteLine("----------------------------------------");
+            Console.WriteLine("Login Credentials:");
+            Console.WriteLine("  Email: admin@democompany.com");
+            Console.WriteLine("  Password: Admin123!");
+            Console.WriteLine("  Company: Demo Company Inc.");
+            Console.WriteLine("----------------------------------------");
+        }
+        else
+        {
+            Console.WriteLine("ERROR: Failed to create demo user:");
+            foreach (var error in result.Errors)
+            {
+                Console.WriteLine($"  - {error.Description}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Optional: Create additional test users
+    /// </summary>
+    public async Task SeedAdditionalUsersAsync(UserManager<ApplicationUser> userManager)
+    {
+        var demoEmployer = await _context.Employers
+            .FirstOrDefaultAsync(e => e.CompanyName == "Demo Company Inc.");
+
+        if (demoEmployer == null) return;
+
+        // Create a regular user (non-admin)
+        var regularUser = await userManager.FindByEmailAsync("user@democompany.com");
+        if (regularUser == null)
+        {
+            regularUser = new ApplicationUser
+            {
+                UserName = "user@democompany.com",
+                Email = "user@democompany.com",
+                EmailConfirmed = true,
+                FullName = "Regular User",
+                PrimaryEmployerId = demoEmployer.Id,
+                IsSystemAdmin = false,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            var result = await userManager.CreateAsync(regularUser, "User123!");
+            if (result.Succeeded)
+            {
+                _context.UserEmployers.Add(new UserEmployer
+                {
+                    UserId = regularUser.Id,
+                    EmployerId = demoEmployer.Id,
+                    Role = "User",
+                    GrantedAt = DateTime.UtcNow
+                });
+
+                await _context.SaveChangesAsync();
+                Console.WriteLine("Regular user created: user@democompany.com / User123!");
+            }
+        }
+
+        // Create a manager user
+        var managerUser = await userManager.FindByEmailAsync("manager@democompany.com");
+        if (managerUser == null)
+        {
+            managerUser = new ApplicationUser
+            {
+                UserName = "manager@democompany.com",
+                Email = "manager@democompany.com",
+                EmailConfirmed = true,
+                FullName = "Department Manager",
+                PrimaryEmployerId = demoEmployer.Id,
+                IsSystemAdmin = false,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            var result = await userManager.CreateAsync(managerUser, "Manager123!");
+            if (result.Succeeded)
+            {
+                _context.UserEmployers.Add(new UserEmployer
+                {
+                    UserId = managerUser.Id,
+                    EmployerId = demoEmployer.Id,
+                    Role = "Manager",
+                    GrantedAt = DateTime.UtcNow
+                });
+
+                await _context.SaveChangesAsync();
+                Console.WriteLine("Manager user created: manager@democompany.com / Manager123!");
+            }
+        }
     }
 }
