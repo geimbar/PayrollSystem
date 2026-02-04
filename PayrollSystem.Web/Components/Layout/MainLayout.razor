@@ -1,23 +1,147 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
+@using MudBlazor
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavigationManager
+@implements IDisposable
 
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
+<MudThemeProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
 
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
+@if (_isLoginOrLogoutPage)
+{
+    <!-- Login/Logout pages - No layout, just the page content -->
+    @Body
+}
+else
+{
+    <!-- Regular pages - Full layout with drawer and appbar -->
+    <MudLayout>
+        <MudAppBar Elevation="1">
+            <MudIconButton Icon="@Icons.Material.Filled.Menu" 
+                           Color="Color.Inherit" 
+                           Edge="Edge.Start" 
+                           OnClick="@((e) => DrawerToggle())" />
+            
+            <MudText Typo="Typo.h6">Payroll System</MudText>
+            
+            <MudSpacer />
+            
+            <AuthorizeView>
+                <Authorized>
+                    <MudText Class="mr-4">
+                        Welcome, @_userName
+                    </MudText>
+                    <MudButton Href="/logout" 
+                               Variant="Variant.Text" 
+                               Color="Color.Inherit"
+                               StartIcon="@Icons.Material.Filled.Logout">
+                        Logout
+                    </MudButton>
+                </Authorized>
+                <NotAuthorized>
+                    <MudButton Href="/login" 
+                               Variant="Variant.Text" 
+                               Color="Color.Inherit">
+                        Login
+                    </MudButton>
+                </NotAuthorized>
+            </AuthorizeView>
+        </MudAppBar>
 
-        <article class="content px-4">
-            @Body
-        </article>
-    </main>
-</div>
+        <MudDrawer @bind-Open="_drawerOpen" 
+                   ClipMode="DrawerClipMode.Always" 
+                   Elevation="2">
+            <MudNavMenu>
+                <MudNavLink Href="/" 
+                            Icon="@Icons.Material.Filled.Home" 
+                            Match="NavLinkMatch.All">
+                    Home
+                </MudNavLink>
+                
+                <AuthorizeView>
+                    <Authorized>
+                        <MudNavLink Href="/counter" 
+                                    Icon="@Icons.Material.Filled.Add">
+                            Counter
+                        </MudNavLink>
+                        <MudNavLink Href="/weather" 
+                                    Icon="@Icons.Material.Filled.Cloud">
+                            Weather
+                        </MudNavLink>
+                        
+                        <MudDivider Class="my-2" />
+                        
+                        <MudNavGroup Title="Employees" 
+                                     Icon="@Icons.Material.Filled.People" 
+                                     Expanded="false">
+                            <MudNavLink Href="/employees" 
+                                        Icon="@Icons.Material.Filled.List">
+                                All Employees
+                            </MudNavLink>
+                            <MudNavLink Href="/employees/new" 
+                                        Icon="@Icons.Material.Filled.PersonAdd">
+                                Add Employee
+                            </MudNavLink>
+                        </MudNavGroup>
+                        
+                        <MudNavLink Href="/departments" 
+                                    Icon="@Icons.Material.Filled.Business">
+                            Departments
+                        </MudNavLink>
+                    </Authorized>
+                </AuthorizeView>
+            </MudNavMenu>
+        </MudDrawer>
 
-<div id="blazor-error-ui">
-    An unhandled error has occurred.
-    <a href="" class="reload">Reload</a>
-    <a class="dismiss">🗙</a>
-</div>
+        <MudMainContent>
+            <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="my-4">
+                @Body
+            </MudContainer>
+        </MudMainContent>
+    </MudLayout>
+}
+
+@code {
+    private bool _drawerOpen = true;
+    private string _userName = string.Empty;
+    private bool _isLoginOrLogoutPage = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            _userName = user.Identity.Name ?? "User";
+        }
+
+        NavigationManager.LocationChanged += OnLocationChanged;
+        CheckIfLoginOrLogoutPage();
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        CheckIfLoginOrLogoutPage();
+        StateHasChanged();
+    }
+
+    private void CheckIfLoginOrLogoutPage()
+    {
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var path = uri.AbsolutePath.ToLower();
+        _isLoginOrLogoutPage = path.Contains("/login") || path.Contains("/logout");
+    }
+
+    private void DrawerToggle()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+    }
+}

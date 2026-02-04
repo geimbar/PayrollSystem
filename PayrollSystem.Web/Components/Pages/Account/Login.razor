@@ -1,0 +1,127 @@
+@page "/login"
+@* NO @rendermode - this makes it static (pre-rendered) so cookies can be set *@
+@attribute [AllowAnonymous]
+@using Microsoft.AspNetCore.Authorization
+@using PayrollSystem.Infrastructure.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@using MudBlazor
+@inject IAccountService AccountService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Login - Payroll System</PageTitle>
+
+<div class="login-container">
+    <MudContainer MaxWidth="MaxWidth.Small">
+        <MudPaper Elevation="3" Class="pa-8">
+            <div class="text-center mb-4">
+                <MudIcon Icon="@Icons.Material.Filled.AccountBalance" Size="Size.Large" Color="Color.Primary" />
+                <MudText Typo="Typo.h4" Class="mt-2">Payroll System</MudText>
+            </div>
+
+            <form method="post" @onsubmit="HandleSubmit" @formname="login-form">
+                <AntiforgeryToken />
+                
+                <MudText Typo="Typo.h6" Class="mb-4">Sign In</MudText>
+
+                @if (!string.IsNullOrEmpty(ErrorMessage))
+                {
+                    <MudAlert Severity="Severity.Error" Class="mb-4">@ErrorMessage</MudAlert>
+                }
+
+                <MudTextField @bind-Value="Email"
+                              Label="Email"
+                              Variant="Variant.Outlined"
+                              InputType="InputType.Email"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Email"
+                              Class="mb-4"
+                              name="email" />
+
+                <MudTextField @bind-Value="Password"
+                              Label="Password"
+                              Variant="Variant.Outlined"
+                              InputType="InputType.Password"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Lock"
+                              Class="mb-4"
+                              name="password" />
+
+                <MudButton ButtonType="ButtonType.Submit"
+                           Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           FullWidth="true"
+                           Size="Size.Large">
+                    CONTINUE
+                </MudButton>
+            </form>
+
+            <MudDivider Class="my-6" />
+            <MudText Typo="Typo.body2" Align="Align.Center" Color="Color.Secondary">
+                Don't have an account? Contact your administrator.
+            </MudText>
+        </MudPaper>
+
+        <MudText Typo="Typo.body2" Align="Align.Center" Color="Color.Secondary" Class="mt-4">
+            © 2026 Payroll System. All rights reserved.
+        </MudText>
+    </MudContainer>
+</div>
+
+<style>
+    .login-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 80vh;
+    }
+</style>
+
+@code {
+    [SupplyParameterFromForm]
+    public string Email { get; set; } = "admin@democompany.com";
+
+    [SupplyParameterFromForm]
+    public string Password { get; set; } = "";
+
+    [SupplyParameterFromQuery]
+    public string? ErrorMessage { get; set; }
+
+    private async Task HandleSubmit()
+    {
+        if (string.IsNullOrWhiteSpace(Email) || string.IsNullOrWhiteSpace(Password))
+        {
+            Navigation.NavigateTo("/login?ErrorMessage=Please%20enter%20email%20and%20password");
+            return;
+        }
+
+        // Get available employers
+        var employers = await AccountService.GetUserEmployersAsync(Email);
+
+        if (!employers.Any())
+        {
+            Navigation.NavigateTo("/login?ErrorMessage=No%20companies%20associated%20with%20this%20account");
+            return;
+        }
+
+        if (employers.Count == 1)
+        {
+            // Auto-login with single employer
+            var result = await AccountService.LoginAsync(Email, Password, employers[0].EmployerId);
+
+            if (result.Success)
+            {
+                Navigation.NavigateTo("/", forceLoad: true);
+            }
+            else
+            {
+                Navigation.NavigateTo($"/login?ErrorMessage={Uri.EscapeDataString(result.ErrorMessage)}");
+            }
+        }
+        else
+        {
+            // Multiple employers - redirect to selection page
+            Navigation.NavigateTo($"/select-employer?email={Uri.EscapeDataString(Email)}&password={Uri.EscapeDataString(Password)}");
+        }
+    }
+}
