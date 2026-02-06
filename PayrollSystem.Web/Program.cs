@@ -31,6 +31,12 @@ builder.Services.AddScoped(sp => new HttpClient
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+builder.Services.AddServerSideBlazor()
+    .AddCircuitOptions(options =>
+    {
+        options.DetailedErrors = true;
+    });
+
 builder.Services.AddMudServices();
 
 // Register scoped services

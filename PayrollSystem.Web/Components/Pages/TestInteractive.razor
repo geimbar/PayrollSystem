@@ -1,0 +1,21 @@
+@page "/test-interactive"
+@rendermode Microsoft.AspNetCore.Components.Web.RenderMode.InteractiveServer
+
+<h3>Interactive Test</h3>
+
+<p>Counter: @counter</p>
+<button @onclick="IncrementCounter">Click Me</button>
+
+<p>Text: @text</p>
+<input @bind="text" />
+
+@code {
+    private int counter = 0;
+    private string text = "test";
+
+    private void IncrementCounter()
+    {
+        counter++;
+        Console.WriteLine($"Counter clicked! New value: {counter}");
+    }
+}

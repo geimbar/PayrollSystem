@@ -1,0 +1,337 @@
+@page "/employees/{EmployeeId:int}"
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.AspNetCore.Components.Authorization
+@using PayrollSystem.Core.Entities.People
+@using PayrollSystem.Core.Entities.Employment
+@using PayrollSystem.Infrastructure.Data
+@using Microsoft.EntityFrameworkCore
+@attribute [Authorize]
+@rendermode Microsoft.AspNetCore.Components.Web.RenderMode.InteractiveServer
+@inject ApplicationDbContext DbContext
+@inject NavigationManager Navigation
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Employee Details - Payroll System</PageTitle>
+
+@if (isLoading)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (employee == null)
+{
+    <MudAlert Severity="Severity.Error">Employee not found</MudAlert>
+    <MudButton Href="/employees" Variant="Variant.Text" Class="mt-4">
+        <MudIcon Icon="@Icons.Material.Filled.ArrowBack" Class="mr-2" />
+        Back to Employees
+    </MudButton>
+}
+else
+{
+    <MudGrid>
+        <MudItem xs="12">
+            <div class="d-flex justify-space-between align-center mb-4">
+                <MudText Typo="Typo.h3">@employee.FirstName @employee.LastName</MudText>
+                <MudButtonGroup Variant="Variant.Outlined">
+                    <MudButton Color="Color.Primary" StartIcon="@Icons.Material.Filled.Edit"
+                               OnClick="EditEmployee">
+                        Edit
+                    </MudButton>
+                    <MudButton Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                               OnClick="ShowDeleteConfirmation">
+                        Delete
+                    </MudButton>
+                </MudButtonGroup>
+            </div>
+        </MudItem>
+
+        @if (showDeleteDialog)
+        {
+            <MudItem xs="12">
+                <MudAlert Severity="Severity.Warning" Class="mb-4">
+                    <MudText><strong>Are you sure you want to delete @employee.FirstName @employee.LastName?</strong></MudText>
+                    <MudText Typo="Typo.body2" Class="mt-2">This action cannot be undone.</MudText>
+                    <MudStack Row="true" Class="mt-3">
+                        <MudButton OnClick="ConfirmDelete" Color="Color.Error" Variant="Variant.Filled" Size="Size.Small">
+                            Yes, Delete
+                        </MudButton>
+                        <MudButton OnClick="CancelDelete" Color="Color.Default" Variant="Variant.Outlined" Size="Size.Small">
+                            Cancel
+                        </MudButton>
+                    </MudStack>
+                </MudAlert>
+            </MudItem>
+        }
+
+        <!-- Personal Information -->
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Personal Information</MudText>
+                <MudStack Spacing="2">
+                    <div>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Full Name</MudText>
+                        <MudText>@employee.FirstName @employee.MiddleName @employee.LastName</MudText>
+                    </div>
+                    @if (!string.IsNullOrEmpty(employee.PreferredName))
+                    {
+                        <div>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Preferred Name</MudText>
+                            <MudText>@employee.PreferredName</MudText>
+                        </div>
+                    }
+                    <div>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Date of Birth</MudText>
+                        <MudText>@employee.DateOfBirth.ToShortDateString()</MudText>
+                    </div>
+                    <div>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Gender</MudText>
+                        <MudText>@employee.Gender</MudText>
+                    </div>
+                    <div>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Nationality</MudText>
+                        <MudText>@employee.Nationality</MudText>
+                    </div>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <!-- Contact Information -->
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Contact Information</MudText>
+                <MudStack Spacing="2">
+                    <div>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Work Email</MudText>
+                        <MudText>@employee.Email</MudText>
+                    </div>
+                    @if (!string.IsNullOrEmpty(employee.PersonalEmail))
+                    {
+                        <div>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Personal Email</MudText>
+                            <MudText>@employee.PersonalEmail</MudText>
+                        </div>
+                    }
+                    <div>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Phone</MudText>
+                        <MudText>@employee.Phone</MudText>
+                    </div>
+                    @if (!string.IsNullOrEmpty(employee.MobilePhone))
+                    {
+                        <div>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Mobile</MudText>
+                            <MudText>@employee.MobilePhone</MudText>
+                        </div>
+                    }
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <!-- Address -->
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Address</MudText>
+                <MudText>@employee.Address</MudText>
+                <MudText>@employee.City, @employee.State @employee.ZipCode</MudText>
+                <MudText>@employee.Country</MudText>
+            </MudPaper>
+        </MudItem>
+
+        <!-- Emergency Contact -->
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Emergency Contact</MudText>
+                @if (!string.IsNullOrEmpty(employee.EmergencyContactName))
+                {
+                    <MudStack Spacing="2">
+                        <div>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Name</MudText>
+                            <MudText>@employee.EmergencyContactName</MudText>
+                        </div>
+                        <div>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Phone</MudText>
+                            <MudText>@employee.EmergencyContactPhone</MudText>
+                        </div>
+                        <div>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Relationship</MudText>
+                            <MudText>@employee.EmergencyContactRelationship</MudText>
+                        </div>
+                    </MudStack>
+                }
+                else
+                {
+                    <MudText Color="Color.Secondary">No emergency contact on file</MudText>
+                }
+            </MudPaper>
+        </MudItem>
+
+        <!-- Employments (Jobs) -->
+        <MudItem xs="12">
+            <MudPaper Class="pa-4">
+                <div class="d-flex justify-space-between align-center mb-3">
+                    <MudText Typo="Typo.h6">Employment History</MudText>
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Add">
+                        Add Job
+                    </MudButton>
+                </div>
+
+                @if (employee.Employments.Any())
+                {
+                    <MudTable Items="@employee.Employments" Hover="true" Dense="true">
+                        <HeaderContent>
+                            <MudTh>Company</MudTh>
+                            <MudTh>Job Title</MudTh>
+                            <MudTh>Department</MudTh>
+                            <MudTh>Type</MudTh>
+                            <MudTh>Status</MudTh>
+                            <MudTh>Start Date</MudTh>
+                            <MudTh>Salary</MudTh>
+                            <MudTh>Primary</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>@context.Company.CompanyName</MudTd>
+                            <MudTd>@context.JobTitle</MudTd>
+                            <MudTd>@(context.Department?.DepartmentName ?? "N/A")</MudTd>
+                            <MudTd>@context.EmploymentType</MudTd>
+                            <MudTd>
+                                <MudChip T="string" Size="Size.Small" Color="@(context.EmploymentStatus == "Active" ? Color.Success : Color.Default)">
+                                    @context.EmploymentStatus
+                                </MudChip>
+                            </MudTd>
+                            <MudTd>@context.StartDate.ToShortDateString()</MudTd>
+                            <MudTd>@context.BaseSalary.ToString("C") @context.Currency</MudTd>
+                            <MudTd>
+                                @if (context.IsPrimaryJob)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.Star" Color="Color.Warning" Size="Size.Small" />
+                                }
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+                else
+                {
+                    <MudText Color="Color.Secondary">No employment records</MudText>
+                }
+            </MudPaper>
+        </MudItem>
+
+        <!-- Bank Accounts -->
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Bank Accounts</MudText>
+                @if (employee.BankAccounts.Any())
+                {
+                    @foreach (var account in employee.BankAccounts.Where(a => a.IsActive))
+                    {
+                        <MudStack Spacing="1" Class="mb-3">
+                            <MudText><strong>@account.BankName</strong> @(account.IsPrimaryAccount ? "(Primary)" : "")</MudText>
+                            <MudText Typo="Typo.body2">@account.AccountType - @account.Currency</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">****@account.AccountNumber.Substring(Math.Max(0, account.AccountNumber.Length - 4))</MudText>
+                        </MudStack>
+                    }
+                }
+                else
+                {
+                    <MudText Color="Color.Secondary">No bank accounts on file</MudText>
+                }
+            </MudPaper>
+        </MudItem>
+
+        <!-- Tax Cards -->
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Tax Information</MudText>
+                @if (employee.TaxCards.Any(tc => tc.IsActive))
+                {
+                    @foreach (var taxCard in employee.TaxCards.Where(tc => tc.IsActive))
+                    {
+                        <MudStack Spacing="1" Class="mb-3">
+                            <MudText><strong>@taxCard.TaxCountry</strong> @(!string.IsNullOrEmpty(taxCard.TaxState) ? $"- {taxCard.TaxState}" : "")</MudText>
+                            <MudText Typo="Typo.body2">Tax Rate: @taxCard.TaxRate.ToString("P2")</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Valid: @taxCard.ValidFrom.ToShortDateString() - @(taxCard.ValidTo?.ToShortDateString() ?? "Ongoing")</MudText>
+                        </MudStack>
+                    }
+                }
+                else
+                {
+                    <MudText Color="Color.Secondary">No tax information on file</MudText>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudButton Href="/employees" Variant="Variant.Text" Class="mt-4">
+        <MudIcon Icon="@Icons.Material.Filled.ArrowBack" Class="mr-2" />
+        Back to Employees
+    </MudButton>
+}
+
+@code {
+    [Parameter]
+    public int EmployeeId { get; set; }
+
+    private bool isLoading = true;
+    private Employee? employee;
+    private bool showDeleteDialog = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            employee = await DbContext.Employees
+                .Include(e => e.Employments)
+                    .ThenInclude(emp => emp.Company)
+                .Include(e => e.Employments)
+                    .ThenInclude(emp => emp.Department)
+                .Include(e => e.BankAccounts)
+                .Include(e => e.TaxCards)
+                .Include(e => e.NextOfKins)
+                .FirstOrDefaultAsync(e => e.Id == EmployeeId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading employee: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void EditEmployee()
+    {
+        Navigation.NavigateTo($"/employees/{EmployeeId}/edit");
+    }
+
+    private void ShowDeleteConfirmation()
+    {
+        showDeleteDialog = true;
+    }
+
+    private void CancelDelete()
+    {
+        showDeleteDialog = false;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (employee == null) return;
+
+        try
+        {
+            DbContext.Employees.Remove(employee);
+            await DbContext.SaveChangesAsync();
+
+            Snackbar.Add($"Employee {employee.FirstName} {employee.LastName} deleted successfully", Severity.Success);
+            await Task.Delay(500);
+            Navigation.NavigateTo("/employees");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting employee: {ex.Message}");
+            Snackbar.Add("Failed to delete employee. They may have associated records (employments, bank accounts, etc.)", Severity.Error);
+            showDeleteDialog = false;
+        }
+    }
+}

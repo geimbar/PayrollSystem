@@ -1,0 +1,328 @@
+@page "/employees/create"
+@using PayrollSystem.Core.Entities.People
+@using PayrollSystem.Infrastructure.Data
+@using Microsoft.AspNetCore.Components.Authorization
+@attribute [Authorize]
+@rendermode Microsoft.AspNetCore.Components.Web.RenderMode.InteractiveServer
+@inject ApplicationDbContext DbContext
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Create Employee - Payroll System</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-4">Create New Employee</MudText>
+
+<MudPaper Class="pa-4">
+    <MudGrid>
+        <!-- Personal Information Section -->
+        <MudItem xs="12">
+            <MudText Typo="Typo.h6" Class="mb-2">Personal Information</MudText>
+            <MudDivider Class="mb-4" />
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="firstName"
+                          Label="First Name"
+                          Required="true"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="middleName"
+                          Label="Middle Name"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="lastName"
+                          Label="Last Name"
+                          Required="true"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="preferredName"
+                          Label="Preferred Name (Optional)"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="dateOfBirthString"
+                          Label="Date of Birth (YYYY-MM-DD)"
+                          Required="true"
+                          Variant="Variant.Outlined"
+                          Placeholder="1990-01-15" />
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="gender"
+                          Label="Gender"
+                          Required="true"
+                          Variant="Variant.Outlined"
+                          HelperText="Male, Female, Other, Prefer not to say" />
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="nationality"
+                          Label="Nationality"
+                          Required="true"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+
+        <!-- Contact Information Section -->
+        <MudItem xs="12">
+            <MudText Typo="Typo.h6" Class="mb-2 mt-4">Contact Information</MudText>
+            <MudDivider Class="mb-4" />
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="email"
+                          Label="Work Email"
+                          InputType="InputType.Email"
+                          Required="true"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="personalEmail"
+                          Label="Personal Email"
+                          InputType="InputType.Email"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="phone"
+                          Label="Phone"
+                          Required="true"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="mobilePhone"
+                          Label="Mobile Phone"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+
+        <!-- Address Section -->
+        <MudItem xs="12">
+            <MudText Typo="Typo.h6" Class="mb-2 mt-4">Address</MudText>
+            <MudDivider Class="mb-4" />
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudTextField @bind-Value="address"
+                          Label="Street Address"
+                          Required="true"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="city"
+                          Label="City"
+                          Required="true"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="state"
+                          Label="State/Province"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="zipCode"
+                          Label="ZIP/Postal Code"
+                          Required="true"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="country"
+                          Label="Country"
+                          Required="true"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+
+        <!-- Emergency Contact Section -->
+        <MudItem xs="12">
+            <MudText Typo="Typo.h6" Class="mb-2 mt-4">Emergency Contact</MudText>
+            <MudDivider Class="mb-4" />
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="emergencyContactName"
+                          Label="Name"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="emergencyContactPhone"
+                          Label="Phone"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="emergencyContactRelationship"
+                          Label="Relationship"
+                          Variant="Variant.Outlined" />
+        </MudItem>
+
+        <!-- Identification Section (Optional) -->
+        <MudItem xs="12">
+            <MudText Typo="Typo.h6" Class="mb-2 mt-4">Identification (Optional)</MudText>
+            <MudDivider Class="mb-4" />
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="ssn"
+                          Label="SSN / National ID"
+                          Variant="Variant.Outlined"
+                          HelperText="Will be encrypted" />
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="passportNumber"
+                          Label="Passport Number"
+                          Variant="Variant.Outlined"
+                          HelperText="Will be encrypted" />
+        </MudItem>
+
+        <!-- Action Buttons -->
+        <MudItem xs="12">
+            <MudDivider Class="my-4" />
+            <MudStack Row="true" Spacing="2">
+                <MudButton OnClick="HandleSubmit"
+                           Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Disabled="@isSaving"
+                           StartIcon="@Icons.Material.Filled.Add">
+                    @if (isSaving)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                        <span>Creating...</span>
+                    }
+                    else
+                    {
+                        <span>Create Employee</span>
+                    }
+                </MudButton>
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Default"
+                           OnClick="Cancel"
+                           Disabled="@isSaving"
+                           StartIcon="@Icons.Material.Filled.Cancel">
+                    Cancel
+                </MudButton>
+            </MudStack>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+@code {
+    // Form fields
+    private string firstName = "";
+    private string middleName = "";
+    private string lastName = "";
+    private string preferredName = "";
+    private string email = "";
+    private string personalEmail = "";
+    private string phone = "";
+    private string mobilePhone = "";
+    private string dateOfBirthString = "1990-01-01";
+    private string gender = "Prefer not to say";
+    private string nationality = "";
+    private string ssn = "";
+    private string passportNumber = "";
+    private string address = "";
+    private string city = "";
+    private string state = "";
+    private string zipCode = "";
+    private string country = "United States";
+    private string emergencyContactName = "";
+    private string emergencyContactPhone = "";
+    private string emergencyContactRelationship = "";
+
+    private bool isSaving = false;
+
+    private async Task HandleSubmit()
+    {
+        // Validate required fields
+        if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName) ||
+            string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(phone))
+        {
+            Snackbar.Add("Please fill in all required fields", Severity.Error);
+            return;
+        }
+
+        // Parse date of birth
+        if (!DateTime.TryParse(dateOfBirthString, out DateTime dob))
+        {
+            Snackbar.Add("Invalid date format. Please use YYYY-MM-DD", Severity.Error);
+            return;
+        }
+
+        isSaving = true;
+        try
+        {
+            // Get tenant ID from authentication claims
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            var tenantClaim = user.FindFirst("TenantId");
+
+            if (tenantClaim == null || !int.TryParse(tenantClaim.Value, out int tenantId))
+            {
+                Snackbar.Add("Unable to determine tenant. Please log out and log back in.", Severity.Error);
+                return;
+            }
+
+            var employee = new Employee
+            {
+                TenantId = tenantId,
+                FirstName = firstName.Trim(),
+                MiddleName = middleName?.Trim() ?? "",
+                LastName = lastName.Trim(),
+                PreferredName = preferredName?.Trim() ?? "",
+                Email = email.Trim(),
+                PersonalEmail = personalEmail?.Trim() ?? "",
+                Phone = phone.Trim(),
+                MobilePhone = mobilePhone?.Trim() ?? "",
+                DateOfBirth = dob,
+                Gender = gender.Trim(),
+                Nationality = nationality.Trim(),
+                SSN = ssn?.Trim() ?? "",
+                PassportNumber = passportNumber?.Trim() ?? "",
+                Address = address.Trim(),
+                City = city.Trim(),
+                State = state?.Trim() ?? "",
+                ZipCode = zipCode.Trim(),
+                Country = country.Trim(),
+                EmergencyContactName = emergencyContactName?.Trim() ?? "",
+                EmergencyContactPhone = emergencyContactPhone?.Trim() ?? "",
+                EmergencyContactRelationship = emergencyContactRelationship?.Trim() ?? "",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            DbContext.Employees.Add(employee);
+            await DbContext.SaveChangesAsync();
+
+            Snackbar.Add($"Employee {employee.FirstName} {employee.LastName} created successfully!", Severity.Success);
+            Navigation.NavigateTo($"/employees/{employee.Id}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating employee: {ex.Message}");
+            Snackbar.Add("Failed to create employee. Please try again.", Severity.Error);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo("/employees");
+    }
+}

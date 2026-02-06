@@ -8,10 +8,30 @@
 @rendermode Microsoft.AspNetCore.Components.Web.RenderMode.InteractiveServer
 @inject ApplicationDbContext DbContext
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Navigation
 
 <PageTitle>Employees - Payroll System</PageTitle>
 
 <MudText Typo="Typo.h3" Class="mb-4">Employees</MudText>
+
+<div class="d-flex justify-space-between align-center mb-4">
+    <MudTextField @bind-Value="searchString"
+                  Placeholder="Search employees..."
+                  Adornment="Adornment.Start"
+                  AdornmentIcon="@Icons.Material.Filled.Search"
+                  IconSize="Size.Medium"
+                  Variant="Variant.Outlined"
+                  Clearable="true"
+                  Style="max-width: 400px;"
+                  Immediate="true"
+                  DebounceInterval="300"></MudTextField>
+    <MudButton Variant="Variant.Filled"
+               Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Add"
+               Href="/employees/create">
+        Create Employee
+    </MudButton>
+</div>
 
 @if (!string.IsNullOrEmpty(scopeInfo))
 {
@@ -24,7 +44,7 @@
 }
 else
 {
-    <MudTable Items="@employees" Hover="true" Striped="true" Dense="true">
+    <MudTable Items="@filteredEmployees" Hover="true" Striped="true" Dense="true">
         <HeaderContent>
             <MudTh>ID</MudTh>
             <MudTh>Name</MudTh>
@@ -55,7 +75,7 @@ else
     </MudTable>
 
     <MudText Typo="Typo.body2" Class="mt-4">
-        Showing @employees.Count employee(s)
+        Showing @filteredEmployees.Count of @employees.Count employee(s)
     </MudText>
 
     <MudButton Href="/" Variant="Variant.Text" Class="mt-4">
@@ -67,6 +87,8 @@ else
 @code {
     private bool isLoading = true;
     private List<Employee> employees = new();
+    private List<Employee> filteredEmployees = new();
+    private string searchString = "";
     private string scopeInfo = "";
     private int? userCompanyId = null;
 
@@ -119,6 +141,8 @@ else
                         .ToList();
                 }
             }
+
+            FilterEmployees();
         }
         catch (Exception ex)
         {
@@ -130,9 +154,34 @@ else
         }
     }
 
+    private void FilterEmployees()
+    {
+        if (string.IsNullOrWhiteSpace(searchString))
+        {
+            filteredEmployees = employees;
+        }
+        else
+        {
+            var search = searchString.ToLower();
+            filteredEmployees = employees.Where(e =>
+                e.FirstName.ToLower().Contains(search) ||
+                e.LastName.ToLower().Contains(search) ||
+                e.Email.ToLower().Contains(search) ||
+                e.Phone.Contains(search) ||
+                e.City.ToLower().Contains(search) ||
+                e.Employments.Any(emp => emp.Company.CompanyName.ToLower().Contains(search))
+            ).ToList();
+        }
+        StateHasChanged();
+    }
+
+    protected override void OnParametersSet()
+    {
+        FilterEmployees();
+    }
+
     private void ViewEmployee(int employeeId)
     {
-        // TODO: Navigate to employee detail page
-        Console.WriteLine($"View employee: {employeeId}");
+        Navigation.NavigateTo($"/employees/{employeeId}");
     }
 }
