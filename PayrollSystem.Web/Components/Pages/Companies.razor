@@ -1,0 +1,111 @@
+@page "/companies"
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.AspNetCore.Components.Authorization
+@using PayrollSystem.Core.Entities.Core
+@using PayrollSystem.Infrastructure.Data
+@using Microsoft.EntityFrameworkCore
+@attribute [Authorize]
+@rendermode Microsoft.AspNetCore.Components.Web.RenderMode.InteractiveServer
+@inject ApplicationDbContext DbContext
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Companies - Payroll System</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-4">Companies</MudText>
+
+@if (!string.IsNullOrEmpty(scopeInfo))
+{
+    <MudAlert Severity="Severity.Info" Class="mb-4">@scopeInfo</MudAlert>
+}
+
+@if (isLoading)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudTable Items="@companies" Hover="true" Striped="true" Dense="true">
+        <HeaderContent>
+            <MudTh>ID</MudTh>
+            <MudTh>Company Name</MudTh>
+            <MudTh>Legal Name</MudTh>
+            <MudTh>City</MudTh>
+            <MudTh>Country</MudTh>
+            <MudTh># Departments</MudTh>
+            <MudTh># Jobs</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="ID">@context.Id</MudTd>
+            <MudTd DataLabel="Company Name">@context.CompanyName</MudTd>
+            <MudTd DataLabel="Legal Name">@context.LegalName</MudTd>
+            <MudTd DataLabel="City">@context.City</MudTd>
+            <MudTd DataLabel="Country">@context.Country</MudTd>
+            <MudTd DataLabel="# Departments">@context.Departments.Count</MudTd>
+            <MudTd DataLabel="# Jobs">@context.Employments.Count</MudTd>
+        </RowTemplate>
+    </MudTable>
+
+    <MudText Typo="Typo.body2" Class="mt-4">
+        Showing @companies.Count compan@(companies.Count == 1 ? "y" : "ies")
+    </MudText>
+
+    <MudButton Href="/" Variant="Variant.Text" Class="mt-4">
+        <MudIcon Icon="@Icons.Material.Filled.ArrowBack" Class="mr-2" />
+        Back to Dashboard
+    </MudButton>
+}
+
+@code {
+    private bool isLoading = true;
+    private List<Company> companies = new();
+    private string scopeInfo = "";
+    private int? userCompanyId = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Get user's company scope
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            var companyIdClaim = user.FindFirst("CompanyId")?.Value;
+            if (!string.IsNullOrEmpty(companyIdClaim) && int.TryParse(companyIdClaim, out int companyId))
+            {
+                userCompanyId = companyId;
+                var company = await DbContext.Companies
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(c => c.Id == companyId);
+                scopeInfo = $"Viewing company: {company?.CompanyName ?? "Unknown Company"}";
+            }
+            else
+            {
+                scopeInfo = "Viewing all companies in your organization";
+            }
+
+            // Load companies - filter by company if user is company-scoped
+            var query = DbContext.Companies
+                .Include(c => c.Departments)
+                .Include(c => c.Employments)
+                .AsQueryable();
+
+            // If user is scoped to a specific company, only show that company
+            if (userCompanyId.HasValue)
+            {
+                query = query.Where(c => c.Id == userCompanyId.Value);
+            }
+
+            companies = await query
+                .OrderBy(c => c.CompanyName)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading companies: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

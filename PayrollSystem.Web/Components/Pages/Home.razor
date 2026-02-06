@@ -1,71 +1,207 @@
 @page "/"
-@using Microsoft.AspNetCore.Authorization
-@using MudBlazor
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.AspNetCore.Components.Authorization
+@using PayrollSystem.Infrastructure.Data
+@using Microsoft.EntityFrameworkCore
 @attribute [Authorize]
+@rendermode Microsoft.AspNetCore.Components.Web.RenderMode.InteractiveServer
+@inject ApplicationDbContext DbContext
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
-<PageTitle>Dashboard</PageTitle>
+<PageTitle>Dashboard - Payroll System</PageTitle>
 
-<MudText Typo="Typo.h3" GutterBottom="true">Dashboard</MudText>
-<MudText Class="mb-8">Welcome to the Payroll System</MudText>
+<MudText Typo="Typo.h3" Class="mb-4">Dashboard</MudText>
 
-<MudGrid>
-    <MudItem xs="12" sm="6" md="3">
-        <MudPaper Elevation="2" Class="pa-4">
-            <MudText Typo="Typo.h6">Employees</MudText>
-            <MudText Typo="Typo.h3" Color="Color.Primary">24</MudText>
-            <MudText Typo="Typo.body2" Color="Color.Secondary">Active employees</MudText>
-        </MudPaper>
-    </MudItem>
-    
-    <MudItem xs="12" sm="6" md="3">
-        <MudPaper Elevation="2" Class="pa-4">
-            <MudText Typo="Typo.h6">Departments</MudText>
-            <MudText Typo="Typo.h3" Color="Color.Primary">5</MudText>
-            <MudText Typo="Typo.body2" Color="Color.Secondary">Active departments</MudText>
-        </MudPaper>
-    </MudItem>
-    
-    <MudItem xs="12" sm="6" md="3">
-        <MudPaper Elevation="2" Class="pa-4">
-            <MudText Typo="Typo.h6">This Month</MudText>
-            <MudText Typo="Typo.h3" Color="Color.Primary">$125K</MudText>
-            <MudText Typo="Typo.body2" Color="Color.Secondary">Payroll total</MudText>
-        </MudPaper>
-    </MudItem>
-    
-    <MudItem xs="12" sm="6" md="3">
-        <MudPaper Elevation="2" Class="pa-4">
-            <MudText Typo="Typo.h6">Pending</MudText>
-            <MudText Typo="Typo.h3" Color="Color.Primary">3</MudText>
-            <MudText Typo="Typo.body2" Color="Color.Secondary">Actions required</MudText>
-        </MudPaper>
-    </MudItem>
-</MudGrid>
+@if (isLoading)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudGrid>
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard>
+                <MudCardContent>
+                    <MudText Typo="Typo.h6">Total Employees</MudText>
+                    <MudText Typo="Typo.h3" Color="Color.Primary">@totalEmployees</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">@employeesScope</MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
 
-<MudPaper Elevation="2" Class="pa-4 mt-4">
-    <MudText Typo="Typo.h6" GutterBottom="true">Recent Activity</MudText>
-    <MudStack Spacing="2">
-        <MudPaper Outlined="true" Class="pa-3">
-            <div class="d-flex align-center">
-                <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Class="mr-3" />
-                <MudText>New employee added: John Smith</MudText>
-            </div>
-        </MudPaper>
-        <MudPaper Outlined="true" Class="pa-3">
-            <div class="d-flex align-center">
-                <MudIcon Icon="@Icons.Material.Filled.Payment" Class="mr-3" />
-                <MudText>Payroll processed for December</MudText>
-            </div>
-        </MudPaper>
-        <MudPaper Outlined="true" Class="pa-3">
-            <div class="d-flex align-center">
-                <MudIcon Icon="@Icons.Material.Filled.Update" Class="mr-3" />
-                <MudText>Department updated: Engineering</MudText>
-            </div>
-        </MudPaper>
-    </MudStack>
-</MudPaper>
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard>
+                <MudCardContent>
+                    <MudText Typo="Typo.h6">Companies</MudText>
+                    <MudText Typo="Typo.h3" Color="Color.Secondary">@totalCompanies</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">@companiesScope</MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard>
+                <MudCardContent>
+                    <MudText Typo="Typo.h6">Departments</MudText>
+                    <MudText Typo="Typo.h3" Color="Color.Tertiary">@totalDepartments</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">@departmentsScope</MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudCard>
+                <MudCardContent>
+                    <MudText Typo="Typo.h6">Active Jobs</MudText>
+                    <MudText Typo="Typo.h3" Color="Color.Success">@totalEmployments</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">@employmentsScope</MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+
+    <MudPaper Class="pa-4 mt-4">
+        <MudText Typo="Typo.h6" Class="mb-4">Your Account</MudText>
+        <MudText><strong>Name:</strong> @userName</MudText>
+        <MudText><strong>Email:</strong> @userEmail</MudText>
+        <MudText><strong>Role:</strong> @userRole</MudText>
+        <MudText><strong>Tenant:</strong> @tenantName</MudText>
+        @if (!string.IsNullOrEmpty(companyName))
+        {
+            <MudText><strong>Company:</strong> @companyName</MudText>
+            <MudAlert Severity="Severity.Info" Class="mt-2">
+                You are scoped to <strong>@companyName</strong> - you only see data for this company.
+            </MudAlert>
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Success" Class="mt-2">
+                You have access to <strong>all companies</strong> in your organization.
+            </MudAlert>
+        }
+    </MudPaper>
+
+    <MudPaper Class="pa-4 mt-4">
+        <MudText Typo="Typo.h6" Class="mb-4">Quick Links</MudText>
+        <MudStack Row="true" Spacing="2">
+            <MudButton Href="/employees" Variant="Variant.Filled" Color="Color.Primary">
+                View Employees
+            </MudButton>
+            <MudButton Href="/companies" Variant="Variant.Filled" Color="Color.Secondary">
+                View Companies
+            </MudButton>
+            <MudButton Href="/counter" Variant="Variant.Outlined" Color="Color.Default">
+                Test Counter
+            </MudButton>
+        </MudStack>
+    </MudPaper>
+}
 
 @code {
-    // You can add code here to fetch real data from your database
+    private bool isLoading = true;
+    private int totalEmployees;
+    private int totalCompanies;
+    private int totalDepartments;
+    private int totalEmployments;
+
+    private string employeesScope = "";
+    private string companiesScope = "";
+    private string departmentsScope = "";
+    private string employmentsScope = "";
+
+    private string userName = "";
+    private string userEmail = "";
+    private string userRole = "";
+    private string tenantName = "";
+    private string companyName = "";
+    private int? userCompanyId = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Get user info
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            userName = user.FindFirst("FullName")?.Value ?? user.Identity?.Name ?? "Unknown";
+            userEmail = user.Identity?.Name ?? "";
+            userRole = user.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "User";
+
+            var tenantIdClaim = user.FindFirst("TenantId")?.Value;
+            var companyIdClaim = user.FindFirst("CompanyId")?.Value;
+
+            // Parse company ID if exists
+            if (!string.IsNullOrEmpty(companyIdClaim) && int.TryParse(companyIdClaim, out int cId))
+            {
+                userCompanyId = cId;
+            }
+
+            // Get statistics - filtered by company if user is company-scoped
+            if (userCompanyId.HasValue)
+            {
+                // Company-scoped user - only count their company's data
+                totalCompanies = await DbContext.Companies
+                    .Where(c => c.Id == userCompanyId.Value)
+                    .CountAsync();
+
+                totalDepartments = await DbContext.Departments
+                    .Where(d => d.CompanyId == userCompanyId.Value)
+                    .CountAsync();
+
+                totalEmployments = await DbContext.Employments
+                    .Where(e => e.CompanyId == userCompanyId.Value)
+                    .CountAsync();
+
+                // Count employees with jobs in this company
+                totalEmployees = await DbContext.Employees
+                    .Where(e => e.Employments.Any(emp => emp.CompanyId == userCompanyId.Value))
+                    .CountAsync();
+
+                employeesScope = "in your company";
+                companiesScope = "your assigned company";
+                departmentsScope = "in your company";
+                employmentsScope = "in your company";
+            }
+            else
+            {
+                // Tenant-wide access
+                totalEmployees = await DbContext.Employees.CountAsync();
+                totalCompanies = await DbContext.Companies.CountAsync();
+                totalDepartments = await DbContext.Departments.CountAsync();
+                totalEmployments = await DbContext.Employments.CountAsync();
+
+                employeesScope = "across all companies";
+                companiesScope = "in your organization";
+                departmentsScope = "across all companies";
+                employmentsScope = "across all companies";
+            }
+
+            // Get tenant name
+            if (!string.IsNullOrEmpty(tenantIdClaim) && int.TryParse(tenantIdClaim, out int tenantId))
+            {
+                var tenant = await DbContext.Tenants
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(t => t.Id == tenantId);
+                tenantName = tenant?.TenantName ?? "Unknown";
+            }
+
+            // Get company name if user is scoped to specific company
+            if (userCompanyId.HasValue)
+            {
+                var company = await DbContext.Companies
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(c => c.Id == userCompanyId.Value);
+                companyName = company?.CompanyName ?? "";
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading dashboard: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
 }
