@@ -1,8 +1,9 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using PayrollSystem.Core.Entities.Identity;
+using PayrollSystem.Core.Entities;
 using PayrollSystem.Infrastructure.Data;
 using System.Security.Claims;
 
@@ -10,19 +11,10 @@ namespace PayrollSystem.Infrastructure.Services;
 
 public interface IAccountService
 {
-    Task<(bool Success, string ErrorMessage)> LoginAsync(string email, string password, int? tenantId = null, int? companyId = null);
+    Task<(bool Success, string ErrorMessage)> LoginAsync(string email, string password, int? employerId = null);
     Task LogoutAsync();
-    Task<List<TenantSelectionDto>> GetUserTenantsAsync(string email);
+    Task<List<EmployerSelectionDto>> GetUserEmployersAsync(string email);
     Task<ApplicationUser?> GetCurrentUserAsync(ClaimsPrincipal principal);
-}
-
-public class TenantSelectionDto
-{
-    public int TenantId { get; set; }
-    public string TenantName { get; set; } = string.Empty;
-    public int? CompanyId { get; set; }
-    public string CompanyName { get; set; } = string.Empty;
-    public string Role { get; set; } = string.Empty;
 }
 
 public class AccountService : IAccountService
@@ -47,44 +39,61 @@ public class AccountService : IAccountService
         _httpContextAccessor = httpContextAccessor;
     }
 
-    public async Task<List<TenantSelectionDto>> GetUserTenantsAsync(string email)
+    public async Task<List<EmployerSelectionDto>> GetUserEmployersAsync(string email)
     {
         var user = await _userManager.FindByEmailAsync(email);
         if (user == null)
-            return new List<TenantSelectionDto>();
+            return new List<EmployerSelectionDto>();
 
+        // System admins can see all employers
         if (user.IsSystemAdmin)
         {
-            return await _context.Tenants
-                .Where(t => t.IsActive)
-                .Select(t => new TenantSelectionDto
+            return await _context.Employers
+                .Where(e => e.IsActive)
+                .Select(e => new EmployerSelectionDto
                 {
-                    TenantId = t.Id,
-                    TenantName = t.TenantName,
-                    CompanyId = null,
-                    CompanyName = "All Companies",
+                    EmployerId = e.Id,
+                    CompanyName = e.CompanyName,
                     Role = "System Admin"
                 })
                 .ToListAsync();
         }
 
-        return await _context.UserTenants
-            .Where(ut => ut.UserId == user.Id)
-            .Include(ut => ut.Tenant)
-            .Include(ut => ut.Company)
-            .Where(ut => ut.Tenant.IsActive)
-            .Select(ut => new TenantSelectionDto
+        // Regular users see only their assigned employers
+        var employers = await _context.UserEmployers
+            .Where(ue => ue.UserId == user.Id)
+            .Include(ue => ue.Employer)
+            .Where(ue => ue.Employer.IsActive)
+            .Select(ue => new EmployerSelectionDto
             {
-                TenantId = ut.TenantId,
-                TenantName = ut.Tenant.TenantName,
-                CompanyId = ut.CompanyId,
-                CompanyName = ut.Company != null ? ut.Company.CompanyName : "All Companies",
-                Role = ut.Role
+                EmployerId = ue.EmployerId,
+                CompanyName = ue.Employer.CompanyName,
+                Role = ue.Role
             })
             .ToListAsync();
+
+        // Add primary employer if set and not already in list
+        if (user.PrimaryEmployerId.HasValue && !employers.Any(e => e.EmployerId == user.PrimaryEmployerId.Value))
+        {
+            var primaryEmployer = await _context.Employers
+                .Where(e => e.Id == user.PrimaryEmployerId.Value && e.IsActive)
+                .FirstOrDefaultAsync();
+
+            if (primaryEmployer != null)
+            {
+                employers.Insert(0, new EmployerSelectionDto
+                {
+                    EmployerId = primaryEmployer.Id,
+                    CompanyName = primaryEmployer.CompanyName,
+                    Role = "Primary"
+                });
+            }
+        }
+
+        return employers;
     }
 
-    public async Task<(bool Success, string ErrorMessage)> LoginAsync(string email, string password, int? tenantId = null, int? companyId = null)
+    public async Task<(bool Success, string ErrorMessage)> LoginAsync(string email, string password, int? employerId = null)
     {
         var user = await _userManager.FindByEmailAsync(email);
         if (user == null)
@@ -99,51 +108,51 @@ public class AccountService : IAccountService
             return (false, "Account is inactive. Please contact your administrator.");
         }
 
-        // Determine which tenant to use
-        int selectedTenantId;
+        // Determine which employer to use
+        int selectedEmployerId;
 
-        if (tenantId.HasValue)
+        if (employerId.HasValue)
         {
-            // Verify user has access to this tenant
+            // Verify user has access to this employer
             if (!user.IsSystemAdmin)
             {
-                var hasAccess = await _context.UserTenants
-                    .AnyAsync(ut => ut.UserId == user.Id && ut.TenantId == tenantId.Value);
+                var hasAccess = await _context.UserEmployers
+                    .AnyAsync(ue => ue.UserId == user.Id && ue.EmployerId == employerId.Value);
 
-                if (!hasAccess && user.PrimaryTenantId != tenantId.Value)
+                if (!hasAccess && user.PrimaryEmployerId != employerId.Value)
                 {
-                    return (false, "You don't have access to this tenant.");
+                    return (false, "You don't have access to this employer.");
                 }
             }
 
-            selectedTenantId = tenantId.Value;
+            selectedEmployerId = employerId.Value;
 
-            // Update user's primary tenant for this session
-            user.PrimaryTenantId = selectedTenantId;
+            // Update user's primary employer for this session
+            user.PrimaryEmployerId = selectedEmployerId;
             await _userManager.UpdateAsync(user);
         }
-        else if (user.PrimaryTenantId.HasValue)
+        else if (user.PrimaryEmployerId.HasValue)
         {
-            selectedTenantId = user.PrimaryTenantId.Value;
+            selectedEmployerId = user.PrimaryEmployerId.Value;
         }
         else if (user.IsSystemAdmin)
         {
-            // System admin with no specific tenant selected
-            var firstTenant = await _context.Tenants.FirstOrDefaultAsync();
-            if (firstTenant == null)
+            // System admin with no specific employer selected
+            var firstEmployer = await _context.Employers.FirstOrDefaultAsync();
+            if (firstEmployer == null)
             {
-                return (false, "No tenants found in the system.");
+                return (false, "No employers found in the system.");
             }
-            selectedTenantId = firstTenant.Id;
-            user.PrimaryTenantId = selectedTenantId;
+            selectedEmployerId = firstEmployer.Id;
+            user.PrimaryEmployerId = selectedEmployerId;
             await _userManager.UpdateAsync(user);
         }
         else
         {
-            return (false, "No tenant associated with this account.");
+            return (false, "No employer associated with this account.");
         }
 
-        // Check if HttpContext is available
+        // Check if we have an HttpContext (needed for cookie authentication)
         var httpContext = _httpContextAccessor.HttpContext;
         if (httpContext == null)
         {
@@ -151,6 +160,7 @@ public class AccountService : IAccountService
             return (false, "Authentication system error. Please try again.");
         }
 
+        // Check if response has already started
         if (httpContext.Response.HasStarted)
         {
             _logger.LogError("Response has already started, cannot set authentication cookie");
@@ -178,8 +188,8 @@ public class AccountService : IAccountService
         user.LastLoginAt = DateTime.UtcNow;
         await _userManager.UpdateAsync(user);
 
-        _logger.LogInformation("User {Email} logged in successfully with TenantId: {TenantId}",
-            email, selectedTenantId);
+        _logger.LogInformation("User {Email} logged in successfully with EmployerId: {EmployerId}",
+            email, selectedEmployerId);
 
         return (true, string.Empty);
     }
@@ -193,4 +203,11 @@ public class AccountService : IAccountService
     {
         return await _userManager.GetUserAsync(principal);
     }
+}
+
+public class EmployerSelectionDto
+{
+    public int EmployerId { get; set; }
+    public string CompanyName { get; set; } = string.Empty;
+    public string Role { get; set; } = string.Empty;
 }
