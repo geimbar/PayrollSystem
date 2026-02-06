@@ -1,0 +1,138 @@
+﻿@page "/employees"
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.AspNetCore.Components.Authorization
+@using PayrollSystem.Core.Entities.People
+@using PayrollSystem.Infrastructure.Data
+@using Microsoft.EntityFrameworkCore
+@attribute [Authorize]
+@rendermode Microsoft.AspNetCore.Components.Web.RenderMode.InteractiveServer
+@inject ApplicationDbContext DbContext
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Employees - Payroll System</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-4">Employees</MudText>
+
+@if (!string.IsNullOrEmpty(scopeInfo))
+{
+    <MudAlert Severity="Severity.Info" Class="mb-4">@scopeInfo</MudAlert>
+}
+
+@if (isLoading)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudTable Items="@employees" Hover="true" Striped="true" Dense="true">
+        <HeaderContent>
+            <MudTh>ID</MudTh>
+            <MudTh>Name</MudTh>
+            <MudTh>Email</MudTh>
+            <MudTh>Phone</MudTh>
+            <MudTh>City</MudTh>
+            <MudTh># of Jobs</MudTh>
+            <MudTh>Companies</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="ID">@context.Id</MudTd>
+            <MudTd DataLabel="Name">@context.FirstName @context.LastName</MudTd>
+            <MudTd DataLabel="Email">@context.Email</MudTd>
+            <MudTd DataLabel="Phone">@context.Phone</MudTd>
+            <MudTd DataLabel="City">@context.City</MudTd>
+            <MudTd DataLabel="# of Jobs">@context.Employments.Count</MudTd>
+            <MudTd DataLabel="Companies">
+                @string.Join(", ", context.Employments.Select(e => e.Company.CompanyName))
+            </MudTd>
+            <MudTd DataLabel="Actions">
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                           OnClick="@(() => ViewEmployee(context.Id))">
+                    View
+                </MudButton>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+
+    <MudText Typo="Typo.body2" Class="mt-4">
+        Showing @employees.Count employee(s)
+    </MudText>
+
+    <MudButton Href="/" Variant="Variant.Text" Class="mt-4">
+        <MudIcon Icon="@Icons.Material.Filled.ArrowBack" Class="mr-2" />
+        Back to Dashboard
+    </MudButton>
+}
+
+@code {
+    private bool isLoading = true;
+    private List<Employee> employees = new();
+    private string scopeInfo = "";
+    private int? userCompanyId = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Get user's company scope
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            var companyIdClaim = user.FindFirst("CompanyId")?.Value;
+            if (!string.IsNullOrEmpty(companyIdClaim) && int.TryParse(companyIdClaim, out int companyId))
+            {
+                userCompanyId = companyId;
+                var company = await DbContext.Companies
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(c => c.Id == companyId);
+                scopeInfo = $"Viewing employees for: {company?.CompanyName ?? "Unknown Company"}";
+            }
+            else
+            {
+                scopeInfo = "Viewing all employees across all companies";
+            }
+
+            // Load employees - filter by company if user is company-scoped
+            var query = DbContext.Employees
+                .Include(e => e.Employments)
+                    .ThenInclude(emp => emp.Company)
+                .AsQueryable();
+
+            // If user is scoped to a specific company, only show employees with jobs in that company
+            if (userCompanyId.HasValue)
+            {
+                query = query.Where(e => e.Employments.Any(emp => emp.CompanyId == userCompanyId.Value));
+            }
+
+            employees = await query
+                .OrderBy(e => e.LastName)
+                .ThenBy(e => e.FirstName)
+                .ToListAsync();
+
+            // Filter employments in memory to only show relevant company
+            if (userCompanyId.HasValue)
+            {
+                foreach (var emp in employees)
+                {
+                    emp.Employments = emp.Employments
+                        .Where(e => e.CompanyId == userCompanyId.Value)
+                        .ToList();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading employees: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ViewEmployee(int employeeId)
+    {
+        // TODO: Navigate to employee detail page
+        Console.WriteLine($"View employee: {employeeId}");
+    }
+}

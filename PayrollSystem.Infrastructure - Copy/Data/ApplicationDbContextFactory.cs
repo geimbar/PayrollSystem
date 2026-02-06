@@ -12,29 +12,13 @@ public class ApplicationDbContextFactory : IDesignTimeDbContextFactory<Applicati
 {
     public ApplicationDbContext CreateDbContext(string[] args)
     {
-        // Build configuration - look in Web project folder
-        var basePath = Path.Combine(Directory.GetCurrentDirectory(), "..", "PayrollSystem.Web");
-
-        // If not found there, try current directory (in case we're running from Web project)
-        if (!Directory.Exists(basePath))
-        {
-            basePath = Directory.GetCurrentDirectory();
-        }
-
         var configuration = new ConfigurationBuilder()
-            .SetBasePath(basePath)
-            .AddJsonFile("appsettings.json", optional: false)
-            .AddJsonFile("appsettings.Development.json", optional: true)
+            .SetBasePath(Directory.GetCurrentDirectory())
+            .AddJsonFile("appsettings.json")
             .Build();
 
         var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
         var connectionString = configuration.GetConnectionString("DefaultConnection");
-
-        if (string.IsNullOrEmpty(connectionString))
-        {
-            throw new InvalidOperationException(
-                $"Connection string 'DefaultConnection' not found in appsettings.json at: {basePath}");
-        }
 
         optionsBuilder.UseSqlServer(connectionString);
 

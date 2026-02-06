@@ -1,193 +1,191 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
-using PayrollSystem.Core.Entities;
-using PayrollSystem.Core.Entities.Audit;
-using PayrollSystem.Core.Entities.Base;
-using PayrollSystem.Core.Entities.Benefits;
-using PayrollSystem.Core.Entities.Employees;
-using PayrollSystem.Core.Entities.Employers;
-using PayrollSystem.Core.Entities.Leaves;
-using PayrollSystem.Core.Entities.Payroll;
-using PayrollSystem.Core.Entities.System;
-using PayrollSystem.Core.Entities.TimeTracking;
-using PayrollSystem.Core.Interfaces;
-using System.Linq.Expressions;
+using PayrollSystem.Core.Entities.Core;
+using PayrollSystem.Core.Entities.Identity;
+using PayrollSystem.Core.Entities.People;
+using PayrollSystem.Core.Entities.Employment;
+using PayrollSystem.Core.Entities.Tax;
+using PayrollSystem.Infrastructure.Services;
 
 namespace PayrollSystem.Infrastructure.Data;
 
-public class ApplicationDbContext : IdentityDbContext<User>
+public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 {
     private readonly ITenantService _tenantService;
-    private readonly IEncryptionService _encryptionService;
 
     public ApplicationDbContext(
         DbContextOptions<ApplicationDbContext> options,
-        ITenantService tenantService,
-        IEncryptionService encryptionService)
+        ITenantService tenantService)
         : base(options)
     {
         _tenantService = tenantService;
-        _encryptionService = encryptionService;
     }
 
-    // System-Wide Tables
-    public DbSet<SystemSettings> SystemSettings { get; set; }
-    public DbSet<Employer> Employers { get; set; }
-    public DbSet<EmployerUser> EmployerUsers { get; set; }
-    public DbSet<ApplicationUser> ApplicationUsers { get; set; }
-    public DbSet<UserEmployer> UserEmployers { get; set; }
+    // Core DbSets
+    public DbSet<Tenant> Tenants { get; set; }
+    public DbSet<Company> Companies { get; set; }
+    public DbSet<UserTenant> UserTenants { get; set; }
 
-    // Tenant-Specific Tables
-    public DbSet<EmployerSettings> EmployerSettings { get; set; }
-    public DbSet<Department> Departments { get; set; }
+    // People DbSets
     public DbSet<Employee> Employees { get; set; }
-    public DbSet<EmployeeCompensation> EmployeeCompensations { get; set; }
-    public DbSet<EmployeeBankAccount> EmployeeBankAccounts { get; set; }
-    public DbSet<TimeSheet> TimeSheets { get; set; }
-    public DbSet<PayrollPeriod> PayrollPeriods { get; set; }
-    public DbSet<PayrollTransaction> PayrollTransactions { get; set; }
-    public DbSet<PayrollDeduction> PayrollDeductions { get; set; }
-    public DbSet<PayrollTax> PayrollTaxes { get; set; }
-    public DbSet<DeductionType> DeductionTypes { get; set; }
-    public DbSet<EmployeeDeduction> EmployeeDeductions { get; set; }
-    public DbSet<BenefitPlan> BenefitPlans { get; set; }
-    public DbSet<EmployeeBenefit> EmployeeBenefits { get; set; }
-    public DbSet<LeaveType> LeaveTypes { get; set; }
-    public DbSet<EmployeeLeaveBalance> EmployeeLeaveBalances { get; set; }
-    public DbSet<LeaveRequest> LeaveRequests { get; set; }
-    public DbSet<TaxBracket> TaxBrackets { get; set; }
-    public DbSet<AuditLog> AuditLogs { get; set; }
+    public DbSet<NextOfKin> NextOfKins { get; set; }
+    public DbSet<BankAccount> BankAccounts { get; set; }
+
+    // Employment DbSets
+    public DbSet<Employment> Employments { get; set; }
+    public DbSet<Department> Departments { get; set; }
+    public DbSet<Compensation> Compensations { get; set; }
+    public DbSet<LeaveBalance> LeaveBalances { get; set; }
+
+    // Tax DbSets
+    public DbSet<TaxCard> TaxCards { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
-        // Apply global query filters
-        //ApplyTenantQueryFilters(modelBuilder);
-        //ApplySoftDeleteFilters(modelBuilder);
+        // Global Query Filters - Filter by TenantId
+        var tenantId = _tenantService.GetCurrentTenantId();
 
-        // Apply entity configurations
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
+        modelBuilder.Entity<Tenant>()
+            .HasQueryFilter(t => !tenantId.HasValue || t.Id == tenantId.Value);
 
-        // Customize Identity tables
-        modelBuilder.Entity<User>(entity =>
-        {
-            entity.ToTable("Users");
-        });
+        modelBuilder.Entity<Company>()
+            .HasQueryFilter(c => !tenantId.HasValue || c.TenantId == tenantId.Value);
 
+        modelBuilder.Entity<Employee>()
+            .HasQueryFilter(e => !tenantId.HasValue || e.TenantId == tenantId.Value);
+
+        modelBuilder.Entity<Employment>()
+            .HasQueryFilter(e => !tenantId.HasValue || e.Employee.TenantId == tenantId.Value);
+
+        modelBuilder.Entity<Department>()
+            .HasQueryFilter(d => !tenantId.HasValue || d.Company.TenantId == tenantId.Value);
+
+        // UserTenant composite key
+        modelBuilder.Entity<UserTenant>()
+            .HasKey(ut => new { ut.UserId, ut.TenantId });
+
+        // ApplicationUser relationships
         modelBuilder.Entity<ApplicationUser>()
-            .HasOne(u => u.PrimaryEmployer)
+            .HasOne(u => u.PrimaryTenant)
             .WithMany()
-            .HasForeignKey(u => u.PrimaryEmployerId)
+            .HasForeignKey(u => u.PrimaryTenantId)
             .OnDelete(DeleteBehavior.SetNull);
-    }
 
-    private void ApplyTenantQueryFilters(ModelBuilder modelBuilder)
-    {
-        // Skip query filters at design time (during migrations)
-        if (_tenantService == null)
-            return;
+        // Configure cascade delete behavior to avoid cycles
 
-        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
-        {
-            if (typeof(TenantEntity).IsAssignableFrom(entityType.ClrType))
-            {
-                // For design time, don't apply the filter
-                // The filter will work at runtime
-                var method = typeof(ApplicationDbContext)
-                    .GetMethod(nameof(GetTenantFilter), System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)?
-                    .MakeGenericMethod(entityType.ClrType);
+        // Tenant -> Companies (Cascade)
+        modelBuilder.Entity<Company>()
+            .HasOne(c => c.Tenant)
+            .WithMany(t => t.Companies)
+            .HasForeignKey(c => c.TenantId)
+            .OnDelete(DeleteBehavior.Cascade);
 
-                if (method != null)
-                {
-                    var filter = method.Invoke(null, new object[] { _tenantService });
-                    modelBuilder.Entity(entityType.ClrType).HasQueryFilter((LambdaExpression)filter);
-                }
-            }
-        }
-    }
+        // Tenant -> Employees (Cascade)
+        modelBuilder.Entity<Employee>()
+            .HasOne(e => e.Tenant)
+            .WithMany(t => t.Employees)
+            .HasForeignKey(e => e.TenantId)
+            .OnDelete(DeleteBehavior.Cascade);
 
-    private static LambdaExpression GetTenantFilter<TEntity>(ITenantService tenantService)
-        where TEntity : TenantEntity
-    {
-        Expression<Func<TEntity, bool>> filter = e => e.EmployerId == tenantService.GetCurrentEmployerId();
-        return filter;
-    }
-    private void ApplySoftDeleteFilters(ModelBuilder modelBuilder)
-    {
-        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
-        {
-            if (typeof(ISoftDelete).IsAssignableFrom(entityType.ClrType))
-            {
-                var parameter = Expression.Parameter(entityType.ClrType, "e");
-                var property = Expression.Property(parameter, nameof(ISoftDelete.IsDeleted));
-                var filter = Expression.Lambda(Expression.Not(property), parameter);
+        // Company -> Departments (Cascade)
+        modelBuilder.Entity<Department>()
+            .HasOne(d => d.Company)
+            .WithMany(c => c.Departments)
+            .HasForeignKey(d => d.CompanyId)
+            .OnDelete(DeleteBehavior.Cascade);
 
-                modelBuilder.Entity(entityType.ClrType).HasQueryFilter(filter);
-            }
-        }
-    }
+        // Employee -> Employments (NO ACTION - avoid cycle through Company)
+        modelBuilder.Entity<Employment>()
+            .HasOne(e => e.Employee)
+            .WithMany(emp => emp.Employments)
+            .HasForeignKey(e => e.EmployeeId)
+            .OnDelete(DeleteBehavior.NoAction);
 
-    public override int SaveChanges()
-    {
-        ApplyAuditInfo();
-        return base.SaveChanges();
-    }
+        // Company -> Employments (NO ACTION - avoid cycle through Employee)
+        modelBuilder.Entity<Employment>()
+            .HasOne(e => e.Company)
+            .WithMany(c => c.Employments)
+            .HasForeignKey(e => e.CompanyId)
+            .OnDelete(DeleteBehavior.NoAction);
 
-    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
-    {
-        ApplyAuditInfo();
-        return base.SaveChangesAsync(cancellationToken);
-    }
+        // Department -> Employments (NO ACTION)
+        modelBuilder.Entity<Employment>()
+            .HasOne(e => e.Department)
+            .WithMany(d => d.Employments)
+            .HasForeignKey(e => e.DepartmentId)
+            .OnDelete(DeleteBehavior.NoAction);
 
-    private void ApplyAuditInfo()
-    {
-        var entries = ChangeTracker.Entries()
-            .Where(e => e.Entity is IAuditable && 
-                   (e.State == EntityState.Added || e.State == EntityState.Modified));
+        // Employment -> Compensations (Cascade)
+        modelBuilder.Entity<Compensation>()
+            .HasOne(c => c.Employment)
+            .WithMany(e => e.Compensations)
+            .HasForeignKey(c => c.EmploymentId)
+            .OnDelete(DeleteBehavior.Cascade);
 
-        var currentTime = DateTime.UtcNow;
-        var currentUserId = "system"; // TODO: Get from auth service
+        // Employment -> LeaveBalances (Cascade)
+        modelBuilder.Entity<LeaveBalance>()
+            .HasOne(lb => lb.Employment)
+            .WithMany(e => e.LeaveBalances)
+            .HasForeignKey(lb => lb.EmploymentId)
+            .OnDelete(DeleteBehavior.Cascade);
 
-        foreach (var entry in entries)
-        {
-            var entity = (IAuditable)entry.Entity;
+        // Employee -> TaxCards (Cascade)
+        modelBuilder.Entity<TaxCard>()
+            .HasOne(tc => tc.Employee)
+            .WithMany(e => e.TaxCards)
+            .HasForeignKey(tc => tc.EmployeeId)
+            .OnDelete(DeleteBehavior.Cascade);
 
-            if (entry.State == EntityState.Added)
-            {
-                entity.CreatedAt = currentTime;
-                entity.CreatedBy = currentUserId;
-            }
+        // Employee -> NextOfKins (Cascade)
+        modelBuilder.Entity<NextOfKin>()
+            .HasOne(nok => nok.Employee)
+            .WithMany(e => e.NextOfKins)
+            .HasForeignKey(nok => nok.EmployeeId)
+            .OnDelete(DeleteBehavior.Cascade);
 
-            entity.ModifiedAt = currentTime;
-            entity.ModifiedBy = currentUserId;
-        }
+        // Employee -> BankAccounts (Cascade)
+        modelBuilder.Entity<BankAccount>()
+            .HasOne(ba => ba.Employee)
+            .WithMany(e => e.BankAccounts)
+            .HasForeignKey(ba => ba.EmployeeId)
+            .OnDelete(DeleteBehavior.Cascade);
 
-        // Set EmployerId for new TenantEntity objects
-        var tenantEntries = ChangeTracker.Entries()
-            .Where(e => e.Entity is TenantEntity && e.State == EntityState.Added);
+        // Configure decimal precision for money/numeric fields
+        modelBuilder.Entity<Employment>()
+            .Property(e => e.BaseSalary)
+            .HasPrecision(18, 2);
 
-        foreach (var entry in tenantEntries)
-        {
-            var entity = (TenantEntity)entry.Entity;
-            if (entity.EmployerId == 0)
-            {
-                try
-                {
-                    entity.EmployerId = _tenantService.GetCurrentEmployerId();
-                }
-                catch
-                {
-                    // During seeding, tenant context might not be set
-                    // This is OK - seeder will set EmployerId explicitly
-                }
-            }
-        }
-    }
+        modelBuilder.Entity<Employment>()
+            .Property(e => e.HoursPerWeek)
+            .HasPrecision(5, 2);
 
-    public void SoftDelete<T>(T entity) where T : class, ISoftDelete
-    {
-        entity.IsDeleted = true;
-        Entry(entity).State = EntityState.Modified;
+        modelBuilder.Entity<Compensation>()
+            .Property(c => c.Amount)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<LeaveBalance>()
+            .Property(lb => lb.TotalDays)
+            .HasPrecision(5, 2);
+
+        modelBuilder.Entity<LeaveBalance>()
+            .Property(lb => lb.UsedDays)
+            .HasPrecision(5, 2);
+
+        modelBuilder.Entity<LeaveBalance>()
+            .Property(lb => lb.RemainingDays)
+            .HasPrecision(5, 2);
+
+        modelBuilder.Entity<TaxCard>()
+            .Property(tc => tc.TaxRate)
+            .HasPrecision(5, 4);
+
+        modelBuilder.Entity<TaxCard>()
+            .Property(tc => tc.DeductionAmount)
+            .HasPrecision(18, 2);
+
+        // Additional configurations
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
     }
 }

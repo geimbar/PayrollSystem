@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
 using PayrollSystem.Core.Entities;
+using PayrollSystem.Core.Entities.Identity;
 using PayrollSystem.Core.Interfaces;
 using PayrollSystem.Infrastructure.Data;
 using PayrollSystem.Infrastructure.Data.Seeder;
@@ -33,11 +34,10 @@ builder.Services.AddRazorComponents()
 builder.Services.AddMudServices();
 
 // Register scoped services
-builder.Services.AddScoped<ITenantService, TenantService>();
 builder.Services.AddScoped<IEncryptionService, EncryptionService>();
 
 // Register AccountService
-builder.Services.AddScoped<TenantService>();
+builder.Services.AddScoped<ITenantService, TenantService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 
 // Add authentication state provider for Blazor
@@ -107,16 +107,9 @@ using (var scope = app.Services.CreateScope())
     var context = services.GetRequiredService<ApplicationDbContext>();
     var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
 
-    var seeder = new DataSeeder(context);
-
-    // Seed employer, departments, employees
+    var seeder = new SHSGroupSeeder(context);  // Changed from DataSeeder
     await seeder.SeedAsync();
-
-    // Seed demo user (requires employer to exist first)
     await seeder.SeedDemoUserAsync(userManager);
-
-    // Optional: Seed additional test users
-    // await seeder.SeedAdditionalUsersAsync(userManager);
 }
 
 // Configure the HTTP request pipeline

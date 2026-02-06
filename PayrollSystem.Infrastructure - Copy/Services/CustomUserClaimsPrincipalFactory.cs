@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using PayrollSystem.Core.Entities.Identity;
+using PayrollSystem.Core.Entities;
 using PayrollSystem.Infrastructure.Data;
 using System.Security.Claims;
 
@@ -33,27 +33,30 @@ public class CustomUserClaimsPrincipalFactory : UserClaimsPrincipalFactory<Appli
             identity.AddClaim(new Claim("IsSystemAdmin", "true"));
         }
 
-        // Add primary tenant ID
-        if (user.PrimaryTenantId.HasValue)
+        // Add primary employer ID
+        if (user.PrimaryEmployerId.HasValue)
         {
-            identity.AddClaim(new Claim("TenantId", user.PrimaryTenantId.Value.ToString()));
+            identity.AddClaim(new Claim("EmployerId", user.PrimaryEmployerId.Value.ToString()));
+        }
+        else if (user.IsSystemAdmin)
+        {
+            // For system admin, get first employer
+            var firstEmployer = await _context.Employers.FirstOrDefaultAsync();
+            if (firstEmployer != null)
+            {
+                identity.AddClaim(new Claim("EmployerId", firstEmployer.Id.ToString()));
+            }
         }
 
-        // Get user's role in this tenant
-        if (!user.IsSystemAdmin && user.PrimaryTenantId.HasValue)
+        // Add role for the user's primary employer
+        if (!user.IsSystemAdmin && user.PrimaryEmployerId.HasValue)
         {
-            var userTenant = await _context.UserTenants
-                .Include(ut => ut.Company)
-                .FirstOrDefaultAsync(ut => ut.UserId == user.Id && ut.TenantId == user.PrimaryTenantId.Value);
+            var userEmployer = await _context.UserEmployers
+                .FirstOrDefaultAsync(ue => ue.UserId == user.Id && ue.EmployerId == user.PrimaryEmployerId.Value);
 
-            if (userTenant != null)
+            if (userEmployer != null)
             {
-                identity.AddClaim(new Claim(ClaimTypes.Role, userTenant.Role));
-
-                if (userTenant.CompanyId.HasValue)
-                {
-                    identity.AddClaim(new Claim("CompanyId", userTenant.CompanyId.Value.ToString()));
-                }
+                identity.AddClaim(new Claim(ClaimTypes.Role, userEmployer.Role));
             }
         }
         else if (user.IsSystemAdmin)

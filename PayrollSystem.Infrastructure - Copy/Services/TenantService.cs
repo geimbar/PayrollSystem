@@ -13,7 +13,6 @@ public class TenantService : ITenantService
     private int? _currentCompanyId;
 
     public int? GetCurrentTenantId() => _currentTenantId;
-
     public int? GetCurrentCompanyId() => _currentCompanyId;
 
     public void SetCurrentTenant(int tenantId, int? companyId = null)
