@@ -1,4 +1,4 @@
-@page "/companies"
+@page "/departments"
 @using PayrollSystem.Core.Entities.Core
 @using PayrollSystem.Infrastructure.Data
 @using Microsoft.EntityFrameworkCore
@@ -7,16 +7,15 @@
 @rendermode Microsoft.AspNetCore.Components.Web.RenderMode.InteractiveServer
 @inject ApplicationDbContext DbContext
 @inject NavigationManager Navigation
-@inject ISnackbar Snackbar
 @inject AuthenticationStateProvider AuthenticationStateProvider
 
-<PageTitle>Companies - Payroll System</PageTitle>
+<PageTitle>Departments - Payroll System</PageTitle>
 
-<MudText Typo="Typo.h3" Class="mb-4">Companies</MudText>
+<MudText Typo="Typo.h3" Class="mb-4">Departments</MudText>
 
 <div class="d-flex justify-space-between align-center mb-4">
     <MudTextField @bind-Value="searchString"
-                  Placeholder="Search companies..."
+                  Placeholder="Search departments..."
                   Adornment="Adornment.Start"
                   AdornmentIcon="@Icons.Material.Filled.Search"
                   IconSize="Size.Medium"
@@ -28,8 +27,8 @@
     <MudButton Variant="Variant.Filled"
                Color="Color.Primary"
                StartIcon="@Icons.Material.Filled.Add"
-               Href="/companies/create">
-        Create Company
+               Href="/departments/create">
+        Create Department
     </MudButton>
 </div>
 
@@ -44,49 +43,40 @@
 }
 else
 {
-    <MudTable Items="@filteredCompanies" Hover="true" Striped="true" Dense="true">
+    <MudTable Items="@filteredDepartments" Hover="true" Striped="true" Dense="true">
         <HeaderContent>
             <MudTh>ID</MudTh>
-            <MudTh>Company Name</MudTh>
-            <MudTh>Legal Name</MudTh>
-            <MudTh>City</MudTh>
-            <MudTh>Country</MudTh>
-            <MudTh># Departments</MudTh>
+            <MudTh>Department Name</MudTh>
+            <MudTh>Company</MudTh>
+            <MudTh>Code</MudTh>
             <MudTh># Employees</MudTh>
             <MudTh>Actions</MudTh>
         </HeaderContent>
         <RowTemplate>
             <MudTd DataLabel="ID">@context.Id</MudTd>
-            <MudTd DataLabel="Company Name">@context.CompanyName</MudTd>
-            <MudTd DataLabel="Legal Name">@context.LegalName</MudTd>
-            <MudTd DataLabel="City">@context.City</MudTd>
-            <MudTd DataLabel="Country">@context.Country</MudTd>
-            <MudTd DataLabel="# Departments">@context.Departments.Count</MudTd>
+            <MudTd DataLabel="Department Name">@context.DepartmentName</MudTd>
+            <MudTd DataLabel="Company">@context.Company.CompanyName</MudTd>
+            <MudTd DataLabel="Code">@context.DepartmentCode</MudTd>
             <MudTd DataLabel="# Employees">@context.Employments.Count</MudTd>
             <MudTd DataLabel="Actions">
                 <MudStack Row="true" Spacing="1">
-                    <MudIconButton Icon="@Icons.Material.Filled.Visibility"
-                                   Size="Size.Small"
-                                   Color="Color.Info"
-                                   Href="@($"/companies/{context.Id}")"
-                                   Title="View Details" />
                     <MudIconButton Icon="@Icons.Material.Filled.Edit"
                                    Size="Size.Small"
                                    Color="Color.Primary"
-                                   Href="@($"/companies/{context.Id}/edit")"
-                                   Title="Edit Company" />
+                                   Href="@($"/departments/{context.Id}/edit")"
+                                   Title="Edit Department" />
                     <MudIconButton Icon="@Icons.Material.Filled.Delete"
                                    Size="Size.Small"
                                    Color="Color.Error"
                                    OnClick="@(() => ShowDeleteDialog(context))"
-                                   Title="Delete Company" />
+                                   Title="Delete Department" />
                 </MudStack>
             </MudTd>
         </RowTemplate>
     </MudTable>
 
     <MudText Typo="Typo.body2" Class="mt-4">
-        Showing @filteredCompanies.Count of @companies.Count compan@(companies.Count == 1 ? "y" : "ies")
+        Showing @filteredDepartments.Count of @departments.Count department(s)
     </MudText>
 
     <MudButton Href="/" Variant="Variant.Text" Class="mt-4">
@@ -96,18 +86,18 @@ else
 }
 
 <!-- Delete Confirmation Dialog -->
-@if (showDeleteConfirmation && companyToDelete != null)
+@if (showDeleteConfirmation && departmentToDelete != null)
 {
     <MudOverlay Visible="true" ZIndex="9999">
         <MudPaper Class="pa-6" Style="max-width: 500px;">
-            <MudText Typo="Typo.h6" Class="mb-4">Delete Company</MudText>
+            <MudText Typo="Typo.h6" Class="mb-4">Delete Department</MudText>
             <MudText Class="mb-4">
-                Are you sure you want to delete <strong>@companyToDelete.CompanyName</strong>?
+                Are you sure you want to delete <strong>@departmentToDelete.DepartmentName</strong>?
             </MudText>
-            @if (companyToDelete.Departments.Any() || companyToDelete.Employments.Any())
+            @if (departmentToDelete.Employments.Any())
             {
                 <MudAlert Severity="Severity.Warning" Class="mb-4">
-                    This company has @companyToDelete.Departments.Count department(s) and @companyToDelete.Employments.Count employee(s). You cannot delete it.
+                    This department has @departmentToDelete.Employments.Count employee(s). You cannot delete it.
                 </MudAlert>
             }
             <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd">
@@ -115,7 +105,7 @@ else
                 <MudButton OnClick="ConfirmDelete"
                            Color="Color.Error"
                            Variant="Variant.Filled"
-                           Disabled="@(companyToDelete.Departments.Any() || companyToDelete.Employments.Any())">
+                           Disabled="@departmentToDelete.Employments.Any()">
                     Delete
                 </MudButton>
             </MudStack>
@@ -125,13 +115,13 @@ else
 
 @code {
     private bool isLoading = true;
-    private List<Company> companies = new();
-    private List<Company> filteredCompanies = new();
+    private List<Department> departments = new();
+    private List<Department> filteredDepartments = new();
     private string searchString = "";
     private string scopeInfo = "";
     private int? userCompanyId = null;
     private bool showDeleteConfirmation = false;
-    private Company? companyToDelete;
+    private Department? departmentToDelete;
 
     protected override async Task OnInitializedAsync()
     {
@@ -147,32 +137,33 @@ else
                 var company = await DbContext.Companies
                     .IgnoreQueryFilters()
                     .FirstOrDefaultAsync(c => c.Id == companyId);
-                scopeInfo = $"Viewing company: {company?.CompanyName ?? "Unknown Company"}";
+                scopeInfo = $"Viewing departments for: {company?.CompanyName ?? "Unknown Company"}";
             }
             else
             {
-                scopeInfo = "Viewing all companies in your organization";
+                scopeInfo = "Viewing all departments across all companies";
             }
 
-            var query = DbContext.Companies
-                .Include(c => c.Departments)
-                .Include(c => c.Employments)
+            var query = DbContext.Departments
+                .Include(d => d.Company)
+                .Include(d => d.Employments)
                 .AsQueryable();
 
             if (userCompanyId.HasValue)
             {
-                query = query.Where(c => c.Id == userCompanyId.Value);
+                query = query.Where(d => d.CompanyId == userCompanyId.Value);
             }
 
-            companies = await query
-                .OrderBy(c => c.CompanyName)
+            departments = await query
+                .OrderBy(d => d.Company.CompanyName)
+                .ThenBy(d => d.DepartmentName)
                 .ToListAsync();
 
-            FilterCompanies();
+            FilterDepartments();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error loading companies: {ex.Message}");
+            Console.WriteLine($"Error loading departments: {ex.Message}");
         }
         finally
         {
@@ -182,63 +173,59 @@ else
 
     protected override void OnParametersSet()
     {
-        FilterCompanies();
+        FilterDepartments();
     }
 
-    private void FilterCompanies()
+    private void FilterDepartments()
     {
         if (string.IsNullOrWhiteSpace(searchString))
         {
-            filteredCompanies = companies;
+            filteredDepartments = departments;
         }
         else
         {
             var search = searchString.ToLower();
-            filteredCompanies = companies.Where(c =>
-                c.CompanyName.ToLower().Contains(search) ||
-                c.LegalName.ToLower().Contains(search) ||
-                c.City.ToLower().Contains(search) ||
-                c.Country.ToLower().Contains(search)
+            filteredDepartments = departments.Where(d =>
+                d.DepartmentName.ToLower().Contains(search) ||
+                d.DepartmentCode.ToLower().Contains(search) ||
+                d.Company.CompanyName.ToLower().Contains(search)
             ).ToList();
         }
         StateHasChanged();
     }
 
-    private void ShowDeleteDialog(Company company)
+    private void ShowDeleteDialog(Department department)
     {
-        companyToDelete = company;
+        departmentToDelete = department;
         showDeleteConfirmation = true;
     }
 
     private void CancelDelete()
     {
-        companyToDelete = null;
+        departmentToDelete = null;
         showDeleteConfirmation = false;
     }
 
     private async Task ConfirmDelete()
     {
-        if (companyToDelete == null) return;
+        if (departmentToDelete == null) return;
 
         try
         {
-            DbContext.Companies.Remove(companyToDelete);
+            DbContext.Departments.Remove(departmentToDelete);
             await DbContext.SaveChangesAsync();
 
-            companies.Remove(companyToDelete);
-            FilterCompanies();
+            departments.Remove(departmentToDelete);
+            FilterDepartments();
 
-            Snackbar.Add($"Company '{companyToDelete.CompanyName}' deleted successfully", Severity.Success);
-
-            companyToDelete = null;
+            departmentToDelete = null;
             showDeleteConfirmation = false;
 
             StateHasChanged();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error deleting company: {ex.Message}");
-            Snackbar.Add("Failed to delete company", Severity.Error);
+            Console.WriteLine($"Error deleting department: {ex.Message}");
         }
     }
 }

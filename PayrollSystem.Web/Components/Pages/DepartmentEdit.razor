@@ -1,0 +1,232 @@
+@page "/departments/{DepartmentId:int}/edit"
+@using PayrollSystem.Core.Entities.Core
+@using PayrollSystem.Infrastructure.Data
+@using Microsoft.EntityFrameworkCore
+@attribute [Authorize]
+@rendermode Microsoft.AspNetCore.Components.Web.RenderMode.InteractiveServer
+@inject ApplicationDbContext DbContext
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Edit Department - Payroll System</PageTitle>
+
+@if (isLoading)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (department == null)
+{
+    <MudAlert Severity="Severity.Error">Department not found</MudAlert>
+}
+else
+{
+    <MudText Typo="Typo.h3" Class="mb-2">Edit Department: @department.DepartmentName</MudText>
+    <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-4">
+        @department.Company.CompanyName
+    </MudText>
+
+    <MudPaper Class="pa-4">
+        <MudGrid>
+            <!-- Company (Read-only) -->
+            <MudItem xs="12">
+                <MudText Typo="Typo.h6" Class="mb-2">Company</MudText>
+                <MudDivider Class="mb-4" />
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudTextField Value="@department.Company.CompanyName" 
+                              Label="Company" 
+                              Variant="Variant.Outlined"
+                              ReadOnly="true"
+                              HelperText="Cannot change company for existing department" />
+            </MudItem>
+
+            <!-- Department Details -->
+            <MudItem xs="12">
+                <MudText Typo="Typo.h6" Class="mb-2 mt-4">Department Details</MudText>
+                <MudDivider Class="mb-4" />
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="departmentName" 
+                              Label="Department Name" 
+                              Required="true"
+                              Variant="Variant.Outlined" />
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="departmentCode" 
+                              Label="Department Code" 
+                              Required="true"
+                              Variant="Variant.Outlined" />
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudTextField @bind-Value="description" 
+                              Label="Description (Optional)" 
+                              Variant="Variant.Outlined"
+                              Lines="3" />
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudCheckBox @bind-Value="isActive" 
+                             Label="Active" 
+                             Color="Color.Primary" />
+            </MudItem>
+
+            <!-- Action Buttons -->
+            <MudItem xs="12">
+                <MudDivider Class="my-4" />
+                <MudStack Row="true" Spacing="2">
+                    <MudButton OnClick="HandleSave" 
+                               Variant="Variant.Filled" 
+                               Color="Color.Primary"
+                               Disabled="@isSaving"
+                               StartIcon="@Icons.Material.Filled.Save">
+                        @if (isSaving)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            <span>Saving...</span>
+                        }
+                        else
+                        {
+                            <span>Save Changes</span>
+                        }
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined" 
+                               Color="Color.Default"
+                               OnClick="Cancel"
+                               Disabled="@isSaving"
+                               StartIcon="@Icons.Material.Filled.Cancel">
+                        Cancel
+                    </MudButton>
+                </MudStack>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <!-- Employee List in this Department -->
+    @if (department.Employments.Any())
+    {
+        <MudPaper Class="pa-4 mt-4">
+            <MudText Typo="Typo.h6" Class="mb-3">Employees in this Department</MudText>
+            <MudTable Items="@department.Employments" Hover="true" Dense="true">
+                <HeaderContent>
+                    <MudTh>Employee</MudTh>
+                    <MudTh>Job Title</MudTh>
+                    <MudTh>Status</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.Employee.FirstName @context.Employee.LastName</MudTd>
+                    <MudTd>@context.JobTitle</MudTd>
+                    <MudTd>@context.EmploymentStatus</MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudPaper>
+    }
+}
+
+@code {
+    [Parameter]
+    public int DepartmentId { get; set; }
+
+    private bool isLoading = true;
+    private bool isSaving = false;
+    private Department? department;
+
+    // Form fields
+    private string departmentName = "";
+    private string departmentCode = "";
+    private string description = "";
+    private bool isActive = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            department = await DbContext.Departments
+                .Include(d => d.Company)
+                .Include(d => d.Employments)
+                    .ThenInclude(e => e.Employee)
+                .FirstOrDefaultAsync(d => d.Id == DepartmentId);
+
+            if (department == null) return;
+
+            // Populate form fields
+            departmentName = department.DepartmentName;
+            departmentCode = department.DepartmentCode;
+            description = department.Description ?? "";
+            isActive = department.IsActive;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading department: {ex.Message}");
+            Snackbar.Add("Failed to load department", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task HandleSave()
+    {
+        if (department == null) return;
+
+        // Validate
+        if (string.IsNullOrWhiteSpace(departmentName))
+        {
+            Snackbar.Add("Please enter a department name", Severity.Error);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(departmentCode))
+        {
+            Snackbar.Add("Please enter a department code", Severity.Error);
+            return;
+        }
+
+        isSaving = true;
+        try
+        {
+            // Check if department code already exists for this company (excluding current department)
+            var exists = await DbContext.Departments
+                .AnyAsync(d => d.CompanyId == department.CompanyId && 
+                              d.DepartmentCode == departmentCode.Trim().ToUpper() &&
+                              d.Id != DepartmentId);
+
+            if (exists)
+            {
+                Snackbar.Add($"Department code '{departmentCode}' already exists for this company", Severity.Error);
+                isSaving = false;
+                return;
+            }
+
+            // Update department
+            department.DepartmentName = departmentName.Trim();
+            department.DepartmentCode = departmentCode.Trim().ToUpper();
+            department.Description = description?.Trim() ?? string.Empty;
+            department.IsActive = isActive;
+            department.UpdatedAt = DateTime.UtcNow;
+
+            await DbContext.SaveChangesAsync();
+
+            Snackbar.Add($"Department '{departmentName}' updated successfully", Severity.Success);
+            Navigation.NavigateTo("/departments");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating department: {ex.Message}");
+            Snackbar.Add("Failed to update department. Please try again.", Severity.Error);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo("/departments");
+    }
+}

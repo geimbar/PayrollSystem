@@ -1,0 +1,280 @@
+@page "/companies/{CompanyId:int}"
+@using PayrollSystem.Core.Entities.Core
+@using PayrollSystem.Infrastructure.Data
+@using Microsoft.EntityFrameworkCore
+@attribute [Authorize]
+@rendermode Microsoft.AspNetCore.Components.Web.RenderMode.InteractiveServer
+@inject ApplicationDbContext DbContext
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Company Details - Payroll System</PageTitle>
+
+@if (isLoading)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (company == null)
+{
+    <MudAlert Severity="Severity.Error">Company not found</MudAlert>
+    <MudButton Href="/companies" Variant="Variant.Text" Class="mt-4">
+        <MudIcon Icon="@Icons.Material.Filled.ArrowBack" Class="mr-2" />
+        Back to Companies
+    </MudButton>
+}
+else
+{
+    <MudGrid>
+        <MudItem xs="12">
+            <div class="d-flex justify-space-between align-center mb-4">
+                <MudText Typo="Typo.h3">@company.CompanyName</MudText>
+                <MudButtonGroup Variant="Variant.Outlined">
+                    <MudButton Color="Color.Primary" StartIcon="@Icons.Material.Filled.Edit"
+                               Href="@($"/companies/{CompanyId}/edit")">
+                        Edit
+                    </MudButton>
+                    <MudButton Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                               OnClick="ShowDeleteConfirmation">
+                        Delete
+                    </MudButton>
+                </MudButtonGroup>
+            </div>
+        </MudItem>
+
+        @if (showDeleteDialog)
+        {
+            <MudItem xs="12">
+                <MudAlert Severity="Severity.Warning" Class="mb-4">
+                    <MudText><strong>Are you sure you want to delete @company.CompanyName?</strong></MudText>
+                    <MudText Typo="Typo.body2" Class="mt-2">This action cannot be undone.</MudText>
+                    @if (company.Departments.Any() || company.Employments.Any())
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Error" Class="mt-2">
+                            Cannot delete: This company has @company.Departments.Count department(s) and @company.Employments.Count employee(s).
+                        </MudText>
+                    }
+                    <MudStack Row="true" Class="mt-3">
+                        <MudButton OnClick="ConfirmDelete" 
+                                   Color="Color.Error" 
+                                   Variant="Variant.Filled" 
+                                   Size="Size.Small"
+                                   Disabled="@(company.Departments.Any() || company.Employments.Any())">
+                            Yes, Delete
+                        </MudButton>
+                        <MudButton OnClick="CancelDelete" Color="Color.Default" Variant="Variant.Outlined" Size="Size.Small">
+                            Cancel
+                        </MudButton>
+                    </MudStack>
+                </MudAlert>
+            </MudItem>
+        }
+
+        <!-- Company Information -->
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Company Information</MudText>
+                <MudStack Spacing="2">
+                    <div>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Legal Name</MudText>
+                        <MudText>@company.LegalName</MudText>
+                    </div>
+                    @if (!string.IsNullOrEmpty(company.TaxId))
+                    {
+                        <div>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Tax ID</MudText>
+                            <MudText>@company.TaxId</MudText>
+                        </div>
+                    }
+                    <div>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Status</MudText>
+                        <MudChip T="string" Size="Size.Small" Color="@(company.IsActive ? Color.Success : Color.Default)">
+                            @(company.IsActive ? "Active" : "Inactive")
+                        </MudChip>
+                    </div>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <!-- Address -->
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Address</MudText>
+                <MudText>@company.Address</MudText>
+                <MudText>@company.City@(!string.IsNullOrEmpty(company.State) ? $", {company.State}" : "") @company.ZipCode</MudText>
+                <MudText>@company.Country</MudText>
+            </MudPaper>
+        </MudItem>
+
+        <!-- Contact Information -->
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Contact Information</MudText>
+                <MudStack Spacing="2">
+                    @if (!string.IsNullOrEmpty(company.Phone))
+                    {
+                        <div>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Phone</MudText>
+                            <MudText>@company.Phone</MudText>
+                        </div>
+                    }
+                    @if (!string.IsNullOrEmpty(company.Email))
+                    {
+                        <div>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Email</MudText>
+                            <MudText>@company.Email</MudText>
+                        </div>
+                    }
+                    @if (string.IsNullOrEmpty(company.Phone) && string.IsNullOrEmpty(company.Email))
+                    {
+                        <MudText Color="Color.Secondary">No contact information on file</MudText>
+                    }
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <!-- Statistics -->
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Statistics</MudText>
+                <MudStack Spacing="2">
+                    <div>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Departments</MudText>
+                        <MudText>@company.Departments.Count</MudText>
+                    </div>
+                    <div>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Employees</MudText>
+                        <MudText>@company.Employments.Count</MudText>
+                    </div>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <!-- Departments List -->
+        @if (company.Departments.Any())
+        {
+            <MudItem xs="12">
+                <MudPaper Class="pa-4">
+                    <MudText Typo="Typo.h6" Class="mb-3">Departments</MudText>
+                    <MudTable Items="@company.Departments" Hover="true" Dense="true">
+                        <HeaderContent>
+                            <MudTh>Department Name</MudTh>
+                            <MudTh>Code</MudTh>
+                            <MudTh># Employees</MudTh>
+                            <MudTh>Status</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>@context.DepartmentName</MudTd>
+                            <MudTd>@context.DepartmentCode</MudTd>
+                            <MudTd>@context.Employments.Count</MudTd>
+                            <MudTd>
+                                <MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Default)">
+                                    @(context.IsActive ? "Active" : "Inactive")
+                                </MudChip>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                </MudPaper>
+            </MudItem>
+        }
+
+        <!-- Employees List -->
+        @if (company.Employments.Any())
+        {
+            <MudItem xs="12">
+                <MudPaper Class="pa-4">
+                    <MudText Typo="Typo.h6" Class="mb-3">Employees</MudText>
+                    <MudTable Items="@company.Employments" Hover="true" Dense="true">
+                        <HeaderContent>
+                            <MudTh>Employee</MudTh>
+                            <MudTh>Job Title</MudTh>
+                            <MudTh>Department</MudTh>
+                            <MudTh>Status</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>@context.Employee.FirstName @context.Employee.LastName</MudTd>
+                            <MudTd>@context.JobTitle</MudTd>
+                            <MudTd>@(context.Department?.DepartmentName ?? "N/A")</MudTd>
+                            <MudTd>
+                                <MudChip T="string" Size="Size.Small" Color="@(context.EmploymentStatus == "Active" ? Color.Success : Color.Default)">
+                                    @context.EmploymentStatus
+                                </MudChip>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+
+    <MudButton Href="/companies" Variant="Variant.Text" Class="mt-4">
+        <MudIcon Icon="@Icons.Material.Filled.ArrowBack" Class="mr-2" />
+        Back to Companies
+    </MudButton>
+}
+
+@code {
+    [Parameter]
+    public int CompanyId { get; set; }
+
+    private bool isLoading = true;
+    private Company? company;
+    private bool showDeleteDialog = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCompany();
+        isLoading = false;
+    }
+
+    private async Task LoadCompany()
+    {
+        try
+        {
+            company = await DbContext.Companies
+                .Include(c => c.Departments)
+                    .ThenInclude(d => d.Employments)
+                .Include(c => c.Employments)
+                    .ThenInclude(e => e.Employee)
+                .Include(c => c.Employments)
+                    .ThenInclude(e => e.Department)
+                .FirstOrDefaultAsync(c => c.Id == CompanyId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading company: {ex.Message}");
+            Snackbar.Add("Failed to load company", Severity.Error);
+        }
+    }
+
+    private void ShowDeleteConfirmation()
+    {
+        showDeleteDialog = true;
+    }
+
+    private void CancelDelete()
+    {
+        showDeleteDialog = false;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (company == null) return;
+
+        try
+        {
+            DbContext.Companies.Remove(company);
+            await DbContext.SaveChangesAsync();
+            
+            Snackbar.Add($"Company {company.CompanyName} deleted successfully", Severity.Success);
+            await Task.Delay(500);
+            Navigation.NavigateTo("/companies");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting company: {ex.Message}");
+            Snackbar.Add("Failed to delete company. It may have associated records.", Severity.Error);
+            showDeleteDialog = false;
+        }
+    }
+}
