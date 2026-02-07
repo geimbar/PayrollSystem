@@ -1,45 +1,54 @@
-@page "/employees/{EmployeeId:int}/jobs/{JobId:int}/edit"
+@page "/employees/{EmployeeId:int}/jobs/add"
 @using PayrollSystem.Core.Entities.Employment
 @using PayrollSystem.Core.Entities.Core
 @using PayrollSystem.Infrastructure.Data
 @using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Authorization
 @attribute [Authorize]
 @rendermode Microsoft.AspNetCore.Components.Web.RenderMode.InteractiveServer
 @inject ApplicationDbContext DbContext
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
-<PageTitle>Edit Job - Payroll System</PageTitle>
+<PageTitle>Add Job - Payroll System</PageTitle>
 
 @if (isLoading)
 {
     <MudProgressCircular Indeterminate="true" />
 }
-else if (employment == null || employee == null)
+else if (employee == null)
 {
-    <MudAlert Severity="Severity.Error">Job not found</MudAlert>
+    <MudAlert Severity="Severity.Error">Employee not found</MudAlert>
 }
 else
 {
-    <MudText Typo="Typo.h3" Class="mb-2">Edit Job: @employment.JobTitle</MudText>
+    <MudText Typo="Typo.h3" Class="mb-2">Add Job for @employee.FirstName @employee.LastName</MudText>
     <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-4">
-        @employee.FirstName @employee.LastName at @employment.Company.CompanyName
+        Assign this employee to a company with a specific position
     </MudText>
 
     <MudPaper Class="pa-4">
         <MudGrid>
-            <!-- Company & Department (Read-only for edit) -->
+            <!-- Company Selection -->
             <MudItem xs="12">
                 <MudText Typo="Typo.h6" Class="mb-2">Company & Department</MudText>
                 <MudDivider Class="mb-4" />
             </MudItem>
 
             <MudItem xs="12" md="6">
-                <MudTextField Value="@employment.Company.CompanyName"
-                              Label="Company"
-                              Variant="Variant.Outlined"
-                              ReadOnly="true"
-                              HelperText="Cannot change company for existing job" />
+                <MudSelect @bind-Value="selectedCompanyId"
+                           Label="Company"
+                           Required="true"
+                           Variant="Variant.Outlined"
+                           T="int?"
+                           AnchorOrigin="Origin.BottomCenter">
+                    <MudSelectItem T="int?" Value="null">-- Select Company --</MudSelectItem>
+                    @foreach (var company in companies)
+                    {
+                        <MudSelectItem T="int?" Value="@company.Id">@company.CompanyName</MudSelectItem>
+                    }
+                </MudSelect>
             </MudItem>
 
             <MudItem xs="12" md="6">
@@ -47,9 +56,10 @@ else
                            Label="Department (Optional)"
                            Variant="Variant.Outlined"
                            T="int?"
+                           Disabled="@(!selectedCompanyId.HasValue)"
                            AnchorOrigin="Origin.BottomCenter">
                     <MudSelectItem T="int?" Value="null">-- No Department --</MudSelectItem>
-                    @foreach (var dept in departments)
+                    @foreach (var dept in filteredDepartments)
                     {
                         <MudSelectItem T="int?" Value="@dept.Id">@dept.DepartmentName</MudSelectItem>
                     }
@@ -66,7 +76,8 @@ else
                 <MudTextField @bind-Value="jobTitle"
                               Label="Job Title"
                               Required="true"
-                              Variant="Variant.Outlined" />
+                              Variant="Variant.Outlined"
+                              Placeholder="e.g., Software Engineer, VP Engineering" />
             </MudItem>
 
             <MudItem xs="12" md="6">
@@ -93,14 +104,6 @@ else
             </MudItem>
 
             <MudItem xs="12" md="6">
-                <MudDatePicker @bind-Date="endDate"
-                               Label="End Date (Optional)"
-                               Variant="Variant.Outlined"
-                               Editable="true"
-                               Clearable="true" />
-            </MudItem>
-
-            <MudItem xs="12" md="6">
                 <MudSelect @bind-Value="employmentStatus"
                            Label="Status"
                            Required="true"
@@ -110,7 +113,6 @@ else
                     <MudSelectItem T="string" Value="@("Active")">Active</MudSelectItem>
                     <MudSelectItem T="string" Value="@("On Leave")">On Leave</MudSelectItem>
                     <MudSelectItem T="string" Value="@("Suspended")">Suspended</MudSelectItem>
-                    <MudSelectItem T="string" Value="@("Terminated")">Terminated</MudSelectItem>
                 </MudSelect>
             </MudItem>
 
@@ -167,10 +169,7 @@ else
             </MudItem>
 
             <MudItem xs="12" md="6">
-                <MudCheckBox @bind-Value="isPrimaryJob"
-                             Label="Set as Primary Job"
-                             Color="Color.Primary"
-                             HelperText="Only one job can be primary" />
+                <MudCheckBox @bind-Value="isPrimaryJob" Label="Set as Primary Job" Color="Color.Primary" />
             </MudItem>
 
             <!-- Action Buttons -->
@@ -181,15 +180,15 @@ else
                                Variant="Variant.Filled"
                                Color="Color.Primary"
                                Disabled="@isSaving"
-                               StartIcon="@Icons.Material.Filled.Save">
+                               StartIcon="@Icons.Material.Filled.Add">
                         @if (isSaving)
                         {
                             <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-                            <span>Saving...</span>
+                            <span>Adding Job...</span>
                         }
                         else
                         {
-                            <span>Save Changes</span>
+                            <span>Add Job</span>
                         }
                     </MudButton>
                     <MudButton Variant="Variant.Outlined"
@@ -209,66 +208,58 @@ else
     [Parameter]
     public int EmployeeId { get; set; }
 
-    [Parameter]
-    public int JobId { get; set; }
-
     private bool isLoading = true;
     private bool isSaving = false;
-    private Employment? employment;
     private PayrollSystem.Core.Entities.People.Employee? employee;
+    private List<Company> companies = new();
     private List<Department> departments = new();
+    private List<Department> filteredDepartments = new();
 
     // Form fields
+    private int? selectedCompanyId;
     private int? selectedDepartmentId;
     private string jobTitle = "";
-    private string employmentType = "";
-    private string employmentStatus = "";
-    private DateTime? startDate;
-    private DateTime? endDate;
+    private string employmentType = "Full-time";
+    private string employmentStatus = "Active";
+    private DateTime? startDate = DateTime.Today;
     private decimal baseSalary = 0;
-    private string currency = "";
-    private string paymentFrequency = "";
-    private decimal hoursPerWeek = 0;
+    private string currency = "USD";
+    private string paymentFrequency = "Monthly";
+    private decimal hoursPerWeek = 40;
     private bool isPrimaryJob = false;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            // Load employment with related data
-            employment = await DbContext.Employments
-                .Include(e => e.Employee)
-                .Include(e => e.Company)
-                .Include(e => e.Department)
-                .FirstOrDefaultAsync(e => e.Id == JobId && e.EmployeeId == EmployeeId);
+            // Load employee
+            employee = await DbContext.Employees
+                .Include(e => e.Employments)
+                .FirstOrDefaultAsync(e => e.Id == EmployeeId);
 
-            if (employment == null) return;
+            if (employee == null) return;
 
-            employee = employment.Employee;
+            // Load companies (filtered by tenant)
+            companies = await DbContext.Companies
+                .OrderBy(c => c.CompanyName)
+                .ToListAsync();
 
-            // Load departments for this company
+            // Load all departments
             departments = await DbContext.Departments
-                .Where(d => d.CompanyId == employment.CompanyId)
+                .Include(d => d.Company)
                 .OrderBy(d => d.DepartmentName)
                 .ToListAsync();
 
-            // Populate form fields
-            selectedDepartmentId = employment.DepartmentId;
-            jobTitle = employment.JobTitle;
-            employmentType = employment.EmploymentType;
-            employmentStatus = employment.EmploymentStatus;
-            startDate = employment.StartDate;
-            endDate = employment.EndDate;
-            baseSalary = employment.BaseSalary;
-            currency = employment.Currency;
-            paymentFrequency = employment.PaymentFrequency;
-            hoursPerWeek = employment.HoursPerWeek;
-            isPrimaryJob = employment.IsPrimaryJob;
+            // If employee has no jobs, set this as primary by default
+            if (!employee.Employments.Any())
+            {
+                isPrimaryJob = true;
+            }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error loading job: {ex.Message}");
-            Snackbar.Add("Failed to load job", Severity.Error);
+            Console.WriteLine($"Error loading data: {ex.Message}");
+            Snackbar.Add("Failed to load data", Severity.Error);
         }
         finally
         {
@@ -276,11 +267,45 @@ else
         }
     }
 
+    protected override void OnParametersSet()
+    {
+        FilterDepartments();
+    }
+
+    private void FilterDepartments()
+    {
+        if (selectedCompanyId.HasValue)
+        {
+            filteredDepartments = departments
+                .Where(d => d.CompanyId == selectedCompanyId.Value)
+                .ToList();
+
+            // Clear department selection if it's not valid for the selected company
+            if (selectedDepartmentId.HasValue &&
+                !filteredDepartments.Any(d => d.Id == selectedDepartmentId.Value))
+            {
+                selectedDepartmentId = null;
+            }
+        }
+        else
+        {
+            filteredDepartments = new List<Department>();
+            selectedDepartmentId = null;
+        }
+        StateHasChanged();
+    }
+
     private async Task HandleSave()
     {
-        if (employment == null) return;
+        if (employee == null) return;
 
         // Validate
+        if (!selectedCompanyId.HasValue)
+        {
+            Snackbar.Add("Please select a company", Severity.Error);
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(jobTitle))
         {
             Snackbar.Add("Please enter a job title", Severity.Error);
@@ -297,10 +322,10 @@ else
         try
         {
             // If setting as primary, unset other primary jobs
-            if (isPrimaryJob && !employment.IsPrimaryJob)
+            if (isPrimaryJob)
             {
                 var existingPrimaryJobs = await DbContext.Employments
-                    .Where(e => e.EmployeeId == EmployeeId && e.IsPrimaryJob && e.Id != JobId)
+                    .Where(e => e.EmployeeId == EmployeeId && e.IsPrimaryJob)
                     .ToListAsync();
 
                 foreach (var job in existingPrimaryJobs)
@@ -309,29 +334,37 @@ else
                 }
             }
 
-            // Update employment
-            employment.DepartmentId = selectedDepartmentId;
-            employment.JobTitle = jobTitle.Trim();
-            employment.EmploymentType = employmentType;
-            employment.EmploymentStatus = employmentStatus;
-            employment.StartDate = startDate.Value;
-            employment.EndDate = endDate;
-            employment.BaseSalary = baseSalary;
-            employment.Currency = currency;
-            employment.PaymentFrequency = paymentFrequency;
-            employment.HoursPerWeek = hoursPerWeek;
-            employment.IsPrimaryJob = isPrimaryJob;
-            employment.UpdatedAt = DateTime.UtcNow;
+            // Create new employment
+            var employment = new Employment
+            {
+                EmployeeId = EmployeeId,
+                CompanyId = selectedCompanyId.Value,
+                DepartmentId = selectedDepartmentId,
+                JobTitle = jobTitle.Trim(),
+                EmploymentType = employmentType,
+                EmploymentStatus = employmentStatus,
+                StartDate = startDate.Value,
+                BaseSalary = baseSalary,
+                Currency = currency,
+                PaymentFrequency = paymentFrequency,
+                HoursPerWeek = hoursPerWeek,
+                IsPrimaryJob = isPrimaryJob,
+                WorkLocation = "Office",
+                TaxCountry = "United States",
+                CreatedAt = DateTime.UtcNow
+            };
 
+            DbContext.Employments.Add(employment);
             await DbContext.SaveChangesAsync();
 
-            Snackbar.Add($"Job updated successfully: {jobTitle}", Severity.Success);
+            var companyName = companies.First(c => c.Id == selectedCompanyId.Value).CompanyName;
+            Snackbar.Add($"Job added successfully: {jobTitle} at {companyName}", Severity.Success);
             Navigation.NavigateTo($"/employees/{EmployeeId}");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error updating job: {ex.Message}");
-            Snackbar.Add("Failed to update job. Please try again.", Severity.Error);
+            Console.WriteLine($"Error adding job: {ex.Message}");
+            Snackbar.Add("Failed to add job. Please try again.", Severity.Error);
         }
         finally
         {

@@ -169,8 +169,11 @@ else
             <MudPaper Class="pa-4">
                 <div class="d-flex justify-space-between align-center mb-3">
                     <MudText Typo="Typo.h6">Employment History</MudText>
-                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
-                               StartIcon="@Icons.Material.Filled.Add">
+                    <MudButton Size="Size.Small"
+                               Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Add"
+                               Href="@($"/employees/{EmployeeId}/jobs/add")">
                         Add Job
                     </MudButton>
                 </div>
@@ -187,6 +190,7 @@ else
                             <MudTh>Start Date</MudTh>
                             <MudTh>Salary</MudTh>
                             <MudTh>Primary</MudTh>
+                            <MudTh>Actions</MudTh>
                         </HeaderContent>
                         <RowTemplate>
                             <MudTd>@context.Company.CompanyName</MudTd>
@@ -205,6 +209,33 @@ else
                                 {
                                     <MudIcon Icon="@Icons.Material.Filled.Star" Color="Color.Warning" Size="Size.Small" />
                                 }
+                            </MudTd>
+                            <MudTd>
+                                <MudStack Row="true" Spacing="1">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                   Size="Size.Small"
+                                                   Color="Color.Primary"
+                                                   Href="@($"/employees/{EmployeeId}/jobs/{context.Id}/edit")"
+                                                   Title="Edit Job" />
+
+                                    @if (!context.IsPrimaryJob && context.EmploymentStatus == "Active")
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Filled.Star"
+                                                       Size="Size.Small"
+                                                       Color="Color.Warning"
+                                                       OnClick="@(() => SetPrimaryJob(context.Id))"
+                                                       Title="Set as Primary Job" />
+                                    }
+
+                                    @if (context.EmploymentStatus == "Active")
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Filled.EventBusy"
+                                                       Size="Size.Small"
+                                                       Color="Color.Error"
+                                                       OnClick="@(() => TerminateJob(context.Id))"
+                                                       Title="Terminate Job" />
+                                    }
+                                </MudStack>
                             </MudTd>
                         </RowTemplate>
                     </MudTable>
@@ -333,5 +364,73 @@ else
             Snackbar.Add("Failed to delete employee. They may have associated records (employments, bank accounts, etc.)", Severity.Error);
             showDeleteDialog = false;
         }
+    }
+
+    private async Task SetPrimaryJob(int jobId)
+    {
+        try
+        {
+            // Unset all primary jobs for this employee
+            var allJobs = await DbContext.Employments
+                .Where(e => e.EmployeeId == EmployeeId)
+                .ToListAsync();
+
+            foreach (var job in allJobs)
+            {
+                job.IsPrimaryJob = (job.Id == jobId);
+            }
+
+            await DbContext.SaveChangesAsync();
+
+            Snackbar.Add("Primary job updated successfully", Severity.Success);
+
+            // Reload employee to refresh the display
+            await LoadEmployee();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error setting primary job: {ex.Message}");
+            Snackbar.Add("Failed to set primary job", Severity.Error);
+        }
+    }
+
+    private async Task TerminateJob(int jobId)
+    {
+        try
+        {
+            var job = await DbContext.Employments.FindAsync(jobId);
+            if (job == null) return;
+
+            job.EmploymentStatus = "Terminated";
+            job.EndDate = DateTime.Today;
+            job.UpdatedAt = DateTime.UtcNow;
+
+            await DbContext.SaveChangesAsync();
+
+            Snackbar.Add($"Job terminated: {job.JobTitle}", Severity.Success);
+
+            // Reload employee to refresh the display
+            await LoadEmployee();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error terminating job: {ex.Message}");
+            Snackbar.Add("Failed to terminate job", Severity.Error);
+        }
+    }
+
+    private async Task LoadEmployee()
+    {
+        employee = await DbContext.Employees
+            .Include(e => e.Employments)
+                .ThenInclude(emp => emp.Company)
+            .Include(e => e.Employments)
+                .ThenInclude(emp => emp.Department)
+            .Include(e => e.BankAccounts)
+            .Include(e => e.TaxCards)
+            .Include(e => e.NextOfKins)
+            .FirstOrDefaultAsync(e => e.Id == EmployeeId);
     }
 }
